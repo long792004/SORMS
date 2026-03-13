@@ -583,7 +583,7 @@ label {
 }
 
 .search-input {
-  padding-left: 2.8rem;
+  padding-left: 2.8rem !important;
 }
 
 .gradient-primary {

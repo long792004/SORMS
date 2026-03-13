@@ -44,15 +44,15 @@ export default function RegisterPage() {
   };
 
   const fields = [
-    { name: 'email', label: 'Email *', type: 'email', required: true },
-    { name: 'userName', label: 'Username *', type: 'text', required: true },
     { name: 'fullName', label: 'Full name', type: 'text' },
+    { name: 'userName', label: 'Username *', type: 'text', required: true },
+    { name: 'email', label: 'Email *', type: 'email', required: true },
     { name: 'phone', label: 'Phone number', type: 'text' },
     { name: 'identityNumber', label: 'Identity number', type: 'text' },
-    { name: 'address', label: 'Address', type: 'text' },
-    { name: 'emergencyContact', label: 'Emergency contact', type: 'text' },
     { name: 'password', label: 'Password *', type: 'password', required: true },
     { name: 'confirmPassword', label: 'Confirm password *', type: 'password', required: true },
+    { name: 'emergencyContact', label: 'Emergency contact', type: 'text' },
+    { name: 'address', label: 'Address', type: 'text' },
   ];
 
   return (
