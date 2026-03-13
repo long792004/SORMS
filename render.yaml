@@ -1,12 +1,11 @@
 services:
   - type: web
     name: sorms-api
-    env: dotnet
+    env: docker
     plan: free
-    rootDir: SORMS.API
-
-    buildCommand: dotnet restore && dotnet publish -c Release -o ./publish
-    startCommand: dotnet ./publish/SORMS.API.dll
+    rootDir: .
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
 
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
