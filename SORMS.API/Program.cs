@@ -181,9 +181,11 @@ builder.Services.AddEndpointsApiExplorer();
     if (app.Environment.IsDevelopment())
     {
         app.UseDeveloperExceptionPage();
-        app.UseSwagger();
-        app.UseSwaggerUI();
     }
+    
+    // Always enable Swagger for testing on Render (Free plan)
+    app.UseSwagger();
+    app.UseSwaggerUI();
 
     app.UseHttpsRedirection();
     
