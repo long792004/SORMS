@@ -155,10 +155,10 @@ export default function InvoicesPage() {
                   <span className="break-words text-lg font-bold text-slate-900 dark:text-white">{fmt(inv.amount)}</span>
                   <button
                     onClick={() => handleViewDetails(inv)}
-                    className="btn btn-primary btn-sm sm:min-w-[8.5rem]"
+                    className={`btn btn-sm sm:min-w-[8.5rem] ${inv.status === 'Paid' || inv.status === 'Cancelled' ? 'btn-ghost' : 'btn-primary'}`}
                   >
-                    {inv.status === 'Paid' ? <Eye className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
-                    {inv.status === 'Paid' ? 'Details' : 'Pay now'}
+                    {inv.status === 'Paid' || inv.status === 'Cancelled' ? <Eye className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
+                    {inv.status === 'Paid' ? 'Details' : inv.status === 'Cancelled' ? 'Cancelled' : 'Pay now'}
                   </button>
                 </div>
               </div>
