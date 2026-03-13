@@ -167,10 +167,9 @@ builder.Services.AddEndpointsApiExplorer();
     {
         options.AddPolicy("AllowAll", policy =>
         {
-            policy.AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .SetIsOriginAllowed(_ => true) // More flexible for multiple frontend URLs
-                  .AllowCredentials(); // Often needed for auth tokens in cookies/headers if not simple
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
         });
     });
 
