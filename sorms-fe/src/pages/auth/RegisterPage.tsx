@@ -48,9 +48,9 @@ export default function RegisterPage() {
     { name: 'userName', label: 'Username *', type: 'text', required: true },
     { name: 'email', label: 'Email *', type: 'email', required: true },
     { name: 'phone', label: 'Phone number', type: 'text' },
-    { name: 'identityNumber', label: 'Identity number', type: 'text' },
     { name: 'password', label: 'Password *', type: 'password', required: true },
     { name: 'confirmPassword', label: 'Confirm password *', type: 'password', required: true },
+    { name: 'identityNumber', label: 'Identity number', type: 'text' },
     { name: 'emergencyContact', label: 'Emergency contact', type: 'text' },
     { name: 'address', label: 'Address', type: 'text' },
   ];

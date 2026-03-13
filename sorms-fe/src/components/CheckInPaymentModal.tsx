@@ -183,25 +183,29 @@ export default function CheckInPaymentModal({
         )}
 
         {/* ACTIONS */}
-        <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
+        <div className="flex flex-col-reverse justify-end gap-4 pt-2 sm:flex-row">
 
           <button
             onClick={onCancel}
             disabled={paying || loading}
-            className="btn btn-secondary w-full sm:w-auto"
+            className="btn btn-secondary h-12 min-w-[120px] rounded-2xl text-sm font-bold shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
 
-          <button
-            onClick={handlePayment}
-            disabled={paying || loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-light))] px-6 py-2.5 font-semibold text-white shadow-[0_18px_40px_-24px_rgba(15,118,110,0.75)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-          >
-            {paying && <Loader className="animate-spin" size={16} />}
-            {paying ? 'Processing...' : paymentSession ? 'Regenerate QR' : 'Pay Now'}
-            <ArrowRight size={16} />
-          </button>
+          {(invoice.status === 'Pending' || invoice.status === 'Processing') && (
+            <button
+              onClick={handlePayment}
+              disabled={paying || loading}
+              className="inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-2xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-light))] px-8 font-bold text-white shadow-[0_20px_45px_-20px_rgba(15,118,110,0.6)] transition-all hover:-translate-y-0.5 hover:brightness-105 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+            >
+              {paying && <Loader className="animate-spin" size={18} />}
+              <span className="tracking-tight">
+                {paying ? 'Processing...' : paymentSession ? 'Regenerate QR' : 'Pay now'}
+              </span>
+              <ArrowRight size={18} />
+            </button>
+          )}
         </div>
 
         <div className="text-center text-xs text-slate-500 dark:text-slate-400 flex justify-center gap-2">

@@ -82,32 +82,32 @@ export default function ResidentListPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <span className="hero-kicker">Resident directory</span>
-            <h1 className="page-title mt-4">Ho so cu dan va tinh trang luu tru</h1>
-            <p className="page-subtitle">Hien thi ro thong tin lien lac, tinh trang hoat dong, phong dang o va cac thao tac nhanh nhu mot danh ba luu tru chuyen nghiep.</p>
+            <h1 className="page-title mt-4">Resident Profiles & Stay Status</h1>
+            <p className="page-subtitle">Manage contact information, activity status, assigned rooms, and quick actions within the professional directory.</p>
           </div>
-          <Link to="/residents/create" className="btn btn-primary"><Plus size={18} /> Them cu dan</Link>
+          <Link to="/residents/create" className="btn btn-primary"><Plus size={18} /> Add resident</Link>
         </div>
 
         <div className="listing-summary mt-6">
           <div className="metric-card">
-            <div className="metric-label">Tong cu dan</div>
+            <div className="metric-label">Total residents</div>
             <div className="metric-value">{residents.length}</div>
-            <div className="metric-note">Bao gom toan bo ho so</div>
+            <div className="metric-note">Full database count</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Dang hoat dong</div>
+            <div className="metric-label">Active users</div>
             <div className="metric-value">{activeResidents}</div>
-            <div className="metric-note">Tai khoan san sang truy cap</div>
+            <div className="metric-note">Accounts with access</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Da gan phong</div>
+            <div className="metric-label">Assigned rooms</div>
             <div className="metric-value">{assignedRooms}</div>
-            <div className="metric-note">Dang co luu tru thuc te</div>
+            <div className="metric-note">Residents with stay</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Lien he khan cap</div>
+            <div className="metric-label">Emergency setup</div>
             <div className="metric-value">{emergencyContacts}</div>
-            <div className="metric-note">Ho so co thong tin du phong</div>
+            <div className="metric-note">Profiles with safety info</div>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ export default function ResidentListPage() {
       <div className="glass-card p-5 sm:p-6">
         <div className="search-shell mb-4">
           <Search size={16} className="search-icon" />
-          <input className="form-input search-input" placeholder="Tim theo ten, email, so dien thoai..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="form-input search-input" placeholder="Search by name, email, or phone..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         {filtered.length === 0 ? <EmptyState message="No residents found" /> : (
@@ -129,7 +129,7 @@ export default function ResidentListPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Ho ten</th><th>Email</th><th>So dien thoai</th><th>Phong</th><th>Trang thai</th><th>Thao tac</th>
+                  <th>Full Name</th><th>Email</th><th>Phone</th><th>Room</th><th>Status</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>

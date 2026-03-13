@@ -72,34 +72,34 @@ export default function RoomListPage({ availableOnly = false }: { availableOnly?
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <span className="hero-kicker">Room inventory</span>
-            <h1 className="page-title mt-4">{availableOnly ? 'Danh sach phong san sang' : 'Toan bo phong trong he thong'}</h1>
+            <h1 className="page-title mt-4">{availableOnly ? 'Available Rooms List' : 'Total Room Inventory'}</h1>
             <p className="page-subtitle">
-              Quan ly ton kho phong theo phong cach booking platform: ro rang ve anh, suc chua, trang thai, gia va hanh dong tiep theo.
+              Manage room availability, types, pricing, and status from a centralized dashboard with a modern booking platform feel.
             </p>
           </div>
-          {hasRole('Admin', 'Staff') && <Link to="/rooms/create" className="btn btn-primary"><Plus size={18} /> Them phong moi</Link>}
+          {hasRole('Admin', 'Staff') && <Link to="/rooms/create" className="btn btn-primary"><Plus size={18} /> Add new room</Link>}
         </div>
 
         <div className="listing-summary mt-6">
           <div className="metric-card">
-            <div className="metric-label">Tong phong</div>
+            <div className="metric-label">Total rooms</div>
             <div className="metric-value">{rooms.length}</div>
-            <div className="metric-note">Toan bo kho phong</div>
+            <div className="metric-note">Full room inventory</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Phong san sang</div>
+            <div className="metric-label">Available</div>
             <div className="metric-value">{availableCount}</div>
-            <div className="metric-note">Co the nhan khach ngay</div>
+            <div className="metric-note">Ready for check-in</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Phong dang su dung</div>
+            <div className="metric-label">Occupied</div>
             <div className="metric-value">{occupiedCount}</div>
-            <div className="metric-note">Can theo doi cong suat</div>
+            <div className="metric-note">Current occupancy</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Gia trung binh</div>
+            <div className="metric-label">Average rate</div>
             <div className="metric-value">{formatCurrency(averageRate)}</div>
-            <div className="metric-note">Moi dem luu tru</div>
+            <div className="metric-note">Per night stay</div>
           </div>
         </div>
       </div>
@@ -107,13 +107,13 @@ export default function RoomListPage({ availableOnly = false }: { availableOnly?
       <div className="glass-card p-5 sm:p-6">
         <div className="search-shell mb-4">
           <Search size={16} className="search-icon" />
-          <input className="form-input search-input" placeholder="Tim theo so phong hoac loai phong..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="form-input search-input" placeholder="Search by room number or type..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         {filtered.length === 0 ? <EmptyState message="No rooms found" /> : (
           <div className="table-shell overflow-x-auto">
             <table className="data-table">
-              <thead><tr><th>Hinh anh</th><th>Phong</th><th>Loai</th><th>Tang</th><th>Dien tich</th><th>Gia moi dem</th><th>Trang thai</th><th>Thao tac</th></tr></thead>
+              <thead><tr><th>Preview</th><th>Room</th><th>Type</th><th>Floor</th><th>Area</th><th>Daily rate</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id}>
