@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -175,7 +176,18 @@ builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddControllers();
     builder.Services.AddAuthorization();
 
+    // Configure Forwarded Headers for Render
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+
     var app = builder.Build();
+
+    // Use Forwarded Headers before other middleware
+    app.UseForwardedHeaders();
 
     // 7. Middleware pipeline
     if (app.Environment.IsDevelopment())
@@ -187,7 +199,7 @@ builder.Services.AddEndpointsApiExplorer();
     app.UseSwagger();
     app.UseSwaggerUI();
 
-    app.UseHttpsRedirection();
+    // app.UseHttpsRedirection(); // Disabled for Render/Reverse Proxy compatibility
     
     // Enable serving static files from wwwroot
     app.UseStaticFiles();
