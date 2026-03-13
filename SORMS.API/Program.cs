@@ -167,9 +167,10 @@ builder.Services.AddEndpointsApiExplorer();
     {
         options.AddPolicy("AllowAll", policy =>
         {
-            policy.AllowAnyOrigin()
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+            policy.AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .SetIsOriginAllowed(_ => true) // More flexible for multiple frontend URLs
+                  .AllowCredentials(); // Often needed for auth tokens in cookies/headers if not simple
         });
     });
 
@@ -189,6 +190,9 @@ builder.Services.AddEndpointsApiExplorer();
     // Use Forwarded Headers before other middleware
     app.UseForwardedHeaders();
 
+    // CORS MUST be as early as possible
+    app.UseCors("AllowAll");
+
     // 7. Middleware pipeline
     if (app.Environment.IsDevelopment())
     {
@@ -204,7 +208,6 @@ builder.Services.AddEndpointsApiExplorer();
     // Enable serving static files from wwwroot
     app.UseStaticFiles();
 
-    app.UseCors("AllowAll");
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
