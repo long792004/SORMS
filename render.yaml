@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: sorms-api
+    runtime: dotnet
+    rootDir: SORMS.API
+    buildCommand: dotnet restore && dotnet publish -c Release -o ./publish
+    startCommand: dotnet ./publish/SORMS.API.dll
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: SORMS
+      - key: Jwt__Audience
+        value: SORMSUsers
+      - key: AdminAccount__Username
+        value: admin
+      - key: AdminAccount__Email
+        sync: false
+      - key: AdminAccount__Password
+        sync: false
+      - key: AdminAccount__FullName
+        value: System Administrator
+      - key: PayOS__ClientId
+        sync: false
+      - key: PayOS__ApiKey
+        sync: false
+      - key: PayOS__ChecksumKey
+        sync: false
+      - key: PayOS__BaseUrl
+        value: https://api-merchant.payos.vn
+      - key: PayOS__WebhookUrl
+        sync: false
+      - key: PublicApiUrl
+        sync: false

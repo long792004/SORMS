@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36301.6
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SORMS.API", "SORMS.API\SORMS.API.csproj", "{C2CDF6A6-0B7C-42BE-AF30-B2FCC5B4CA2E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C2CDF6A6-0B7C-42BE-AF30-B2FCC5B4CA2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2CDF6A6-0B7C-42BE-AF30-B2FCC5B4CA2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2CDF6A6-0B7C-42BE-AF30-B2FCC5B4CA2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2CDF6A6-0B7C-42BE-AF30-B2FCC5B4CA2E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6AB1AB30-5DAB-440B-9C17-29BA7AB89244}
+	EndGlobalSection
+EndGlobal
