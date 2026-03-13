@@ -1,7 +1,7 @@
 services:
   - type: web
     name: sorms-api
-    runtime: dotnet
+    env: dotnet
     rootDir: SORMS.API
     buildCommand: dotnet restore && dotnet publish -c Release -o ./publish
     startCommand: dotnet ./publish/SORMS.API.dll
