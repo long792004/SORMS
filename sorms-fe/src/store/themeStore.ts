@@ -1,49 +1,26 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
-type Theme = 'light' | 'dark';
+type ThemeMode = "light" | "dark";
 
 interface ThemeState {
-  theme: Theme;
-  toggleTheme: () => void;
-  setTheme: (theme: Theme) => void;
+  mode: ThemeMode;
+  toggleMode: () => void;
+  setMode: (mode: ThemeMode) => void;
 }
 
-const getInitialTheme = (): Theme => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('theme-storage');
-    if (stored === 'light' || stored === 'dark') {
-      return stored as Theme;
-    }
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-  }
-  return 'light';
-};
+const saved = localStorage.getItem("theme_mode") as ThemeMode | null;
+const initialMode: ThemeMode = saved ?? "dark";
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  theme: getInitialTheme(),
-  toggleTheme: () =>
+  mode: initialMode,
+  toggleMode: () =>
     set((state) => {
-      const newTheme = state.theme === 'light' ? 'dark' : 'light';
-      localStorage.setItem('theme-storage', newTheme);
-      updateDocumentTheme(newTheme);
-      return { theme: newTheme };
+      const nextMode: ThemeMode = state.mode === "dark" ? "light" : "dark";
+      localStorage.setItem("theme_mode", nextMode);
+      return { mode: nextMode };
     }),
-  setTheme: (theme: Theme) => {
-    localStorage.setItem('theme-storage', theme);
-    updateDocumentTheme(theme);
-    set({ theme });
-  },
-}));
-
-export const updateDocumentTheme = (theme: Theme) => {
-  if (typeof window !== 'undefined') {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+  setMode: (mode) => {
+    localStorage.setItem("theme_mode", mode);
+    set({ mode });
   }
-};
+}));

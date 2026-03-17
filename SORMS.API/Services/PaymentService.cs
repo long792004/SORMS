@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QRCoder;
@@ -8,6 +9,7 @@ using SORMS.API.Interfaces;
 using SORMS.API.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -63,7 +65,7 @@ namespace SORMS.API.Services
 
             if (!_payOSEnabled)
             {
-                _logger.LogWarning("PayOS is not configured or using placeholder credentials. Payment links will be in demo mode.");
+                _logger.LogWarning("PayOS is not configured or using placeholder credentials. Real payment QR/link is disabled until PayOS credentials are provided.");
             }
         }
 
@@ -76,6 +78,7 @@ namespace SORMS.API.Services
                 var invoice = await _context.Invoices
                     .Include(i => i.Resident)
                     .Include(i => i.Room)
+                    .Include(i => i.Voucher)
                     .FirstOrDefaultAsync(i => i.Id == invoiceId);
 
                 if (invoice == null)
@@ -100,6 +103,7 @@ namespace SORMS.API.Services
                     .Where(i => i.ResidentId == residentId)
                     .Include(i => i.Resident)
                     .Include(i => i.Room)
+                    .Include(i => i.Voucher)
                     .OrderByDescending(i => i.CreatedAt)
                     .ToListAsync();
 
@@ -121,6 +125,7 @@ namespace SORMS.API.Services
                 var invoices = await _context.Invoices
                     .Include(i => i.Resident)
                     .Include(i => i.Room)
+                    .Include(i => i.Voucher)
                     .OrderByDescending(i => i.CreatedAt)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
@@ -150,6 +155,8 @@ namespace SORMS.API.Services
                     ResidentId = invoiceDto.ResidentId,
                     RoomId = invoiceDto.RoomId,
                     Amount = invoiceDto.Amount,
+                    DiscountAmount = 0,
+                    TotalAmount = invoiceDto.Amount,
                     Description = invoiceDto.Description,
                     Status = "Pending",
                     CreatedAt = DateTime.UtcNow
@@ -172,7 +179,9 @@ namespace SORMS.API.Services
         {
             try
             {
-                var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
+                var invoice = await _context.Invoices
+                    .Include(i => i.Voucher)
+                    .FirstOrDefaultAsync(i => i.Id == invoiceId);
                 if (invoice == null)
                     return false;
 
@@ -190,6 +199,95 @@ namespace SORMS.API.Services
             }
         }
 
+        public async Task<InvoiceDetailDto> ApplyVoucherToInvoiceAsync(int invoiceId, string voucherCode, string currentUserId)
+        {
+            IDbContextTransaction? transaction = null;
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(voucherCode))
+                    throw new ArgumentException("Voucher code is required.");
+
+                if (!int.TryParse(currentUserId, out var userId))
+                    throw new UnauthorizedAccessException("Current user is invalid.");
+
+                var resident = await _context.Residents
+                    .FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+
+                if (resident == null)
+                    throw new UnauthorizedAccessException("Resident profile not found.");
+
+                transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+                var invoice = await _context.Invoices
+                    .Include(i => i.Resident)
+                    .Include(i => i.Room)
+                    .Include(i => i.Voucher)
+                    .FirstOrDefaultAsync(i => i.Id == invoiceId);
+
+                if (invoice == null)
+                    throw new KeyNotFoundException("Invoice not found.");
+
+                if (!string.Equals(invoice.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Voucher can only be applied to pending invoices.");
+
+                if (invoice.ResidentId != resident.Id)
+                    throw new UnauthorizedAccessException("You are not allowed to apply a voucher to this invoice.");
+
+                if (invoice.VoucherId.HasValue)
+                    throw new InvalidOperationException("A voucher has already been applied to this invoice.");
+
+                var normalizedVoucherCode = NormalizeVoucherCode(voucherCode);
+                var voucher = await _context.Vouchers.FirstOrDefaultAsync(v => v.Code == normalizedVoucherCode);
+
+                if (voucher == null)
+                    throw new KeyNotFoundException("Voucher not found.");
+
+                ValidateVoucherForInvoice(voucher, invoice.Amount);
+
+                var discountAmount = CalculateDiscountAmount(invoice.Amount, voucher);
+
+                invoice.VoucherId = voucher.Id;
+                invoice.DiscountAmount = discountAmount;
+                invoice.TotalAmount = Math.Max(0, invoice.Amount - discountAmount);
+                invoice.PayOSOrderId = null;
+                invoice.CheckoutUrl = null;
+                voucher.UsedCount++;
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return MapToInvoiceDetailDto(invoice);
+            }
+            catch (DbUpdateException ex)
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                _logger.LogWarning(ex, "Race condition detected while applying voucher to invoice {InvoiceId}", invoiceId);
+                throw new InvalidOperationException("Voucher is no longer available. Please refresh and try again.");
+            }
+            catch (Exception ex)
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                _logger.LogError(ex, "Error applying voucher {VoucherCode} to invoice {InvoiceId}", voucherCode, invoiceId);
+                throw;
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    await transaction.DisposeAsync();
+                }
+            }
+        }
+
         // ==================== PayOS Payment ====================
 
         public async Task<PaymentResponseDto> CreatePaymentLinkAsync(int invoiceId, string? returnUrl, string? cancelUrl)
@@ -198,6 +296,7 @@ namespace SORMS.API.Services
             {
                 var invoice = await _context.Invoices
                     .Include(i => i.Resident)
+                    .Include(i => i.Voucher)
                     .FirstOrDefaultAsync(i => i.Id == invoiceId);
 
                 if (invoice == null)
@@ -206,86 +305,11 @@ namespace SORMS.API.Services
                 if (invoice.Status == "Paid")
                     throw new Exception("Invoice is already paid");
 
-                // Generate unique order code
-                long orderCode = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L) + (invoice.Id % 1000);
-                invoice.PayOSOrderId = orderCode;
-
-                // Prepare return URLs
-                string finalReturnUrl = returnUrl ?? $"{_frontendUrl}/resident/invoices?success=true";
-                string finalCancelUrl = cancelUrl ?? $"{_frontendUrl}/resident/invoices?cancel=true";
-
-                if (!_payOSEnabled)
-                {
-                    // Demo mode response if PayOS is not configured
-                    invoice.CheckoutUrl = $"{finalReturnUrl}&orderCode={orderCode}&demo=true";
-                    await _context.SaveChangesAsync();
-
-                    return new PaymentResponseDto
-                    {
-                        Success = true,
-                        Message = "Payment link created (demo mode)",
-                        CheckoutUrl = invoice.CheckoutUrl,
-                        OrderCode = orderCode,
-                        InvoiceId = invoice.Id,
-                        Status = invoice.Status,
-                        QrCodeDataUrl = GenerateQrCodeDataUrl(invoice.CheckoutUrl)
-                    };
-                }
-
-                await EnsureWebhookConfiguredAsync();
-
-                int amount = decimal.ToInt32(decimal.Round(invoice.Amount, MidpointRounding.AwayFromZero));
-                if (amount <= 0)
-                    throw new Exception("Invoice amount must be greater than 0.");
-
-                string payOSDescription = BuildPayOSDescription(invoice.Id);
-                var paymentRequest = new PayOSCreatePaymentRequestDto
-                {
-                    OrderCode = orderCode,
-                    Amount = amount,
-                    Description = payOSDescription,
-                    BuyerName = invoice.Resident?.FullName,
-                    BuyerEmail = invoice.Resident?.Email,
-                    BuyerPhone = invoice.Resident?.Phone,
-                    Items = new List<PayOSItemDto>
-                    {
-                        new()
-                        {
-                            Name = BuildItemName(invoice.Description),
-                            Quantity = 1,
-                            Price = amount
-                        }
-                    },
-                    ReturnUrl = finalReturnUrl,
-                    CancelUrl = finalCancelUrl,
-                    ExpiredAt = DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds(),
-                    Signature = CreatePaymentRequestSignature(amount, finalCancelUrl, payOSDescription, orderCode, finalReturnUrl)
-                };
-
-                var client = CreatePayOSClient();
-                using var response = await client.PostAsJsonAsync("/v2/payment-requests", paymentRequest, _jsonOptions);
-                var payload = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                    throw new Exception($"PayOS create link failed: {payload}");
-
-                var payOSResponse = JsonSerializer.Deserialize<PayOSCreatePaymentApiResponseDto>(payload, _jsonOptions);
-                if (payOSResponse?.Code != "00" || payOSResponse.Data == null)
-                    throw new Exception(payOSResponse?.Desc ?? "PayOS did not return a payment link.");
-
-                invoice.CheckoutUrl = payOSResponse.Data.CheckoutUrl;
-                await _context.SaveChangesAsync();
-
-                return new PaymentResponseDto
-                {
-                    Success = true,
-                    Message = "Payment link created successfully",
-                    CheckoutUrl = payOSResponse.Data.CheckoutUrl,
-                    OrderCode = payOSResponse.Data.OrderCode,
-                    InvoiceId = invoice.Id,
-                    Status = NormalizePayOSStatus(payOSResponse.Data.Status),
-                    QrCodeDataUrl = GenerateQrCodeDataUrl(payOSResponse.Data.QrCode)
-                };
+                return await CreatePaymentLinkForInvoiceAsync(
+                    invoice,
+                    returnUrl,
+                    cancelUrl,
+                    DateTime.UtcNow.AddMinutes(15));
             }
             catch (Exception ex)
             {
@@ -298,6 +322,193 @@ namespace SORMS.API.Services
                     OrderCode = null
                 };
             }
+        }
+
+        public async Task<PaymentResponseDto> CreateRoomBookingPaymentLinkAsync(int roomId, int residentId, CreateRoomPaymentLinkDto dto)
+        {
+            IDbContextTransaction? transaction = null;
+
+            try
+            {
+                var expectedCheckIn = NormalizeUtcDate(dto.ExpectedCheckInDate);
+                var expectedCheckOut = NormalizeUtcDate(dto.ExpectedCheckOutDate);
+
+                if (expectedCheckOut <= expectedCheckIn)
+                    throw new InvalidOperationException("Check-out date must be greater than check-in date.");
+
+                if (dto.NumberOfResidents <= 0)
+                    throw new InvalidOperationException("Number of residents must be greater than 0.");
+
+                transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+                var resident = await _context.Residents
+                    .FirstOrDefaultAsync(r => r.Id == residentId && r.IsActive);
+
+                if (resident == null)
+                    throw new InvalidOperationException("Resident not found.");
+
+                var room = await _context.Rooms
+                    .FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {roomId} FOR UPDATE")
+                    .FirstOrDefaultAsync();
+
+                if (room == null)
+                    throw new InvalidOperationException("Room not found.");
+
+                var now = DateTime.UtcNow;
+                var isRoomAvailable = room.IsActive &&
+                                      (room.Status == "Available" ||
+                                       (room.Status == "OnHold" && room.HoldExpiresAt.HasValue && room.HoldExpiresAt.Value <= now));
+
+                if (!isRoomAvailable)
+                    throw new InvalidOperationException("Room is currently held by another user");
+
+                var activeBookingStatuses = new[] { "PendingCheckIn", "CheckedIn", "PendingCheckOut" };
+                var roomAlreadyBooked = await _context.CheckInRecords
+                    .AnyAsync(r => r.RoomId == roomId
+                                   && activeBookingStatuses.Contains(r.Status)
+                                   && expectedCheckIn < r.ExpectedCheckOutDate
+                                   && expectedCheckOut > r.ExpectedCheckInDate);
+
+                if (roomAlreadyBooked)
+                    throw new InvalidOperationException("Room is currently held by another user");
+
+                var holdExpiresAt = now.AddMinutes(15);
+                room.Status = "OnHold";
+                room.HoldExpiresAt = holdExpiresAt;
+
+                var nights = (expectedCheckOut - expectedCheckIn).Days;
+                var amount = room.MonthlyRent * nights;
+
+                var invoice = new Invoice
+                {
+                    ResidentId = residentId,
+                    Resident = resident,
+                    RoomId = roomId,
+                    Amount = amount,
+                    DiscountAmount = 0,
+                    TotalAmount = amount,
+                    Description = $"Room booking hold for room {room.RoomNumber} ({expectedCheckIn:yyyy-MM-dd} to {expectedCheckOut:yyyy-MM-dd})",
+                    Status = "Pending",
+                    CreatedAt = now,
+                    BookingCheckInDate = expectedCheckIn,
+                    BookingCheckOutDate = expectedCheckOut,
+                    BookingNumberOfResidents = dto.NumberOfResidents
+                };
+
+                _context.Invoices.Add(invoice);
+                await _context.SaveChangesAsync();
+
+                var paymentLink = await CreatePaymentLinkForInvoiceAsync(
+                    invoice,
+                    dto.ReturnUrl,
+                    dto.CancelUrl,
+                    holdExpiresAt);
+
+                if (!paymentLink.Success)
+                    throw new InvalidOperationException(paymentLink.Message);
+
+                await transaction.CommitAsync();
+                return paymentLink;
+            }
+            catch (InvalidOperationException)
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                _logger.LogError(ex, "Error creating room booking payment link for room {RoomId} and resident {ResidentId}", roomId, residentId);
+                throw;
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    await transaction.DisposeAsync();
+                }
+            }
+        }
+
+        private async Task<PaymentResponseDto> CreatePaymentLinkForInvoiceAsync(
+            Invoice invoice,
+            string? returnUrl,
+            string? cancelUrl,
+            DateTime expiresAtUtc)
+        {
+            // Generate unique order code
+            long orderCode = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L) + (invoice.Id % 1000);
+            invoice.PayOSOrderId = orderCode;
+
+            // Prepare return URLs
+            string finalReturnUrl = returnUrl ?? $"{_frontendUrl}/resident/invoices?success=true";
+            string finalCancelUrl = cancelUrl ?? $"{_frontendUrl}/resident/invoices?cancel=true";
+
+            if (!_payOSEnabled)
+                throw new Exception("PayOS chưa được cấu hình. Vui lòng cấu hình PayOS ClientId/ApiKey/ChecksumKey để tạo QR thanh toán thật.");
+
+            await EnsureWebhookConfiguredAsync();
+
+            int amount = decimal.ToInt32(decimal.Round(invoice.TotalAmount, MidpointRounding.AwayFromZero));
+            if (amount <= 0)
+                throw new Exception("Invoice amount must be greater than 0.");
+
+            string payOSDescription = BuildPayOSDescription(invoice.Id);
+            var paymentRequest = new PayOSCreatePaymentRequestDto
+            {
+                OrderCode = orderCode,
+                Amount = amount,
+                Description = payOSDescription,
+                BuyerName = invoice.Resident?.FullName,
+                BuyerEmail = invoice.Resident?.Email,
+                BuyerPhone = invoice.Resident?.Phone,
+                Items = new List<PayOSItemDto>
+                {
+                    new()
+                    {
+                        Name = BuildItemName(invoice.Description),
+                        Quantity = 1,
+                        Price = amount
+                    }
+                },
+                ReturnUrl = finalReturnUrl,
+                CancelUrl = finalCancelUrl,
+                ExpiredAt = new DateTimeOffset(expiresAtUtc).ToUnixTimeSeconds(),
+                Signature = CreatePaymentRequestSignature(amount, finalCancelUrl, payOSDescription, orderCode, finalReturnUrl)
+            };
+
+            var client = CreatePayOSClient();
+            using var response = await client.PostAsJsonAsync("/v2/payment-requests", paymentRequest, _jsonOptions);
+            var payload = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+                throw new Exception($"PayOS create link failed: {payload}");
+
+            var payOSResponse = JsonSerializer.Deserialize<PayOSCreatePaymentApiResponseDto>(payload, _jsonOptions);
+            if (payOSResponse?.Code != "00" || payOSResponse.Data == null)
+                throw new Exception(payOSResponse?.Desc ?? "PayOS did not return a payment link.");
+
+            invoice.CheckoutUrl = payOSResponse.Data.CheckoutUrl;
+            await _context.SaveChangesAsync();
+
+            return new PaymentResponseDto
+            {
+                Success = true,
+                Message = "Payment link created successfully",
+                CheckoutUrl = payOSResponse.Data.CheckoutUrl,
+                OrderCode = payOSResponse.Data.OrderCode,
+                InvoiceId = invoice.Id,
+                Status = NormalizePayOSStatus(payOSResponse.Data.Status),
+                QrCodeDataUrl = GenerateQrCodeDataUrl(payOSResponse.Data.QrCode)
+            };
         }
 
         public async Task<PaymentStatusDto?> GetPaymentStatusAsync(int invoiceId)
@@ -322,7 +533,12 @@ namespace SORMS.API.Services
                     InvoiceId = invoice.Id,
                     PayOSOrderId = invoice.PayOSOrderId ?? 0,
                     Status = invoice.Status,
-                    Amount = invoice.Amount,
+                    Amount = invoice.TotalAmount,
+                    OriginalAmount = invoice.Amount,
+                    DiscountAmount = invoice.DiscountAmount,
+                    TotalAmount = invoice.TotalAmount,
+                    VoucherId = invoice.VoucherId,
+                    VoucherCode = invoice.Voucher?.Code,
                     Description = invoice.Description,
                     CreatedAt = invoice.CreatedAt,
                     PaidAt = invoice.PaidAt,
@@ -564,11 +780,7 @@ namespace SORMS.API.Services
 
                 if (!_payOSEnabled)
                 {
-                    // Demo mode: just mark as paid
-                    if (invoice != null)
-                    {
-                        return await MarkInvoiceAsPaidAsync(invoice.Id);
-                    }
+                    _logger.LogWarning("VerifyPayment was called but PayOS is not configured.");
                     return false;
                 }
 
@@ -591,6 +803,8 @@ namespace SORMS.API.Services
 
         public async Task<bool> HandlePayOSWebhookAsync(PaymentWebhookDto webhookData)
         {
+            IDbContextTransaction? transaction = null;
+
             try
             {
                 if (webhookData.Data == null)
@@ -602,26 +816,86 @@ namespace SORMS.API.Services
                     return false;
                 }
 
+                transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
                 var invoice = await _context.Invoices
-                    .FirstOrDefaultAsync(i => i.PayOSOrderId == webhookData.Data.OrderCode);
+                    .FromSqlInterpolated($"SELECT * FROM \"Invoices\" WHERE \"PayOSOrderId\" = {webhookData.Data.OrderCode} FOR UPDATE")
+                    .FirstOrDefaultAsync();
 
                 if (invoice == null)
                 {
                     _logger.LogInformation("PayOS webhook acknowledged for unknown order {orderCode}. This can happen during webhook confirmation.", webhookData.Data.OrderCode);
+                    await transaction.CommitAsync();
                     return true;
                 }
 
                 if (webhookData.Success && webhookData.Code == "00" && webhookData.Data.Code == "00")
                 {
-                    await ApplyPayOSStatusToInvoiceAsync(invoice, "PAID");
+                    if (!string.Equals(invoice.Status, "Paid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        invoice.Status = "Paid";
+                        invoice.PaidAt = DateTime.UtcNow;
+
+                        if (invoice.RoomId.HasValue)
+                        {
+                            var room = await _context.Rooms
+                                .FromSqlInterpolated($"SELECT * FROM \"Rooms\" WHERE \"Id\" = {invoice.RoomId.Value} FOR UPDATE")
+                                .FirstOrDefaultAsync();
+                            if (room != null)
+                            {
+                                room.Status = "Occupied";
+                                room.HoldExpiresAt = null;
+                            }
+                        }
+
+                        var existingCheckIn = await _context.CheckInRecords
+                            .FirstOrDefaultAsync(c => c.ResidentId == invoice.ResidentId
+                                                   && c.RoomId == invoice.RoomId
+                                                   && c.Status == "PendingCheckIn"
+                                                   && c.RequestType == "CheckIn"
+                                                   && c.RequestTime >= invoice.CreatedAt.AddMinutes(-1));
+
+                        if (existingCheckIn == null && invoice.RoomId.HasValue)
+                        {
+                            var checkInRecord = new CheckInRecord
+                            {
+                                ResidentId = invoice.ResidentId,
+                                RoomId = invoice.RoomId.Value,
+                                RequestTime = DateTime.UtcNow,
+                                ExpectedCheckInDate = invoice.BookingCheckInDate ?? NormalizeUtcDate(DateTime.UtcNow),
+                                ExpectedCheckOutDate = invoice.BookingCheckOutDate ?? NormalizeUtcDate(DateTime.UtcNow).AddDays(1),
+                                NumberOfResidents = Math.Max(1, invoice.BookingNumberOfResidents ?? 1),
+                                Status = "PendingCheckIn",
+                                RequestType = "CheckIn"
+                            };
+
+                            _context.CheckInRecords.Add(checkInRecord);
+                        }
+
+                        await _context.SaveChangesAsync();
+                    }
                 }
+
+                await transaction.CommitAsync();
 
                 return true;
             }
             catch (Exception ex)
             {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+
                 _logger.LogError($"Error handling PayOS webhook: {ex.Message}");
                 throw;
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    await transaction.DisposeAsync();
+                }
             }
         }
 
@@ -784,14 +1058,66 @@ namespace SORMS.API.Services
                 ResidentName = invoice.Resident?.FullName ?? "Unknown",
                 RoomId = invoice.RoomId,
                 RoomNumber = invoice.Room?.RoomNumber ?? "N/A",
-                Amount = invoice.Amount,
+                Amount = invoice.TotalAmount,
+                OriginalAmount = invoice.Amount,
+                DiscountAmount = invoice.DiscountAmount,
+                TotalAmount = invoice.TotalAmount,
+                VoucherId = invoice.VoucherId,
+                VoucherCode = invoice.Voucher?.Code,
                 Description = invoice.Description,
                 Status = invoice.Status,
                 CheckoutUrl = invoice.CheckoutUrl,
                 CreatedAt = invoice.CreatedAt,
                 PaidAt = invoice.PaidAt,
-                PayOSOrderId = invoice.PayOSOrderId
+                PayOSOrderId = invoice.PayOSOrderId,
+                BookingCheckInDate = invoice.BookingCheckInDate,
+                BookingCheckOutDate = invoice.BookingCheckOutDate,
+                BookingNumberOfResidents = invoice.BookingNumberOfResidents
             };
+        }
+
+        private static string NormalizeVoucherCode(string voucherCode)
+        {
+            return voucherCode.Trim().ToUpperInvariant();
+        }
+
+        private static void ValidateVoucherForInvoice(Voucher voucher, decimal originalAmount)
+        {
+            var now = DateTime.UtcNow;
+
+            if (!voucher.IsActive)
+                throw new InvalidOperationException("Voucher is inactive.");
+
+            if (now < voucher.StartDate || now > voucher.EndDate)
+                throw new InvalidOperationException("Voucher is outside its valid date range.");
+
+            if (voucher.UsedCount >= voucher.UsageLimit)
+                throw new InvalidOperationException("Voucher usage limit has been reached.");
+
+            if (originalAmount < voucher.MinInvoiceAmount)
+                throw new InvalidOperationException("Invoice does not meet the voucher minimum amount requirement.");
+        }
+
+        private static decimal CalculateDiscountAmount(decimal originalAmount, Voucher voucher)
+        {
+            decimal discount = voucher.DiscountType switch
+            {
+                "FixedAmount" => voucher.Value,
+                "Percentage" => (originalAmount * voucher.Value) / 100m,
+                _ => throw new InvalidOperationException("Unsupported voucher discount type.")
+            };
+
+            if (voucher.MaxDiscountAmount.HasValue)
+            {
+                discount = Math.Min(discount, voucher.MaxDiscountAmount.Value);
+            }
+
+            return Math.Min(originalAmount, Math.Max(0, decimal.Round(discount, 2, MidpointRounding.AwayFromZero)));
+        }
+
+        private static DateTime NormalizeUtcDate(DateTime value)
+        {
+            return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
         }
 
         private RoomPricingDto MapToRoomPricingDto(RoomPricingConfig pricing)

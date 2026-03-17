@@ -3,6 +3,7 @@ using SORMS.API.Data;
 using SORMS.API.DTOs;
 using SORMS.API.Interfaces;
 using SORMS.API.Models;
+using System.Text.Json;
 
 namespace SORMS.API.Services
 {
@@ -17,14 +18,20 @@ namespace SORMS.API.Services
 
         public async Task<IEnumerable<RoomDto>> GetAllRoomsAsync()
         {
-            var rooms = await _context.Rooms.ToListAsync();
+            var rooms = await _context.Rooms
+                .AsNoTracking()
+                .Include(r => r.Reviews)
+                .ToListAsync();
 
             return rooms.Select(MapToRoomDto);
         }
 
-        public async Task<RoomDto> GetRoomByIdAsync(int id)
+        public async Task<RoomDto?> GetRoomByIdAsync(int id)
         {
-            var room = await _context.Rooms.FindAsync(id);
+            var room = await _context.Rooms
+                .AsNoTracking()
+                .Include(r => r.Reviews)
+                .FirstOrDefaultAsync(r => r.Id == id);
             if (room == null) return null;
 
             return MapToRoomDto(room);
@@ -32,6 +39,7 @@ namespace SORMS.API.Services
 
         public async Task<RoomDto> CreateRoomAsync(RoomDto roomDto)
         {
+            var imageUrls = NormalizeImageUrls(roomDto.ImageUrls, roomDto.ImageUrl);
             var room = new Room
             {
                 RoomNumber = roomDto.RoomNumber,
@@ -41,24 +49,27 @@ namespace SORMS.API.Services
                 Area = roomDto.Area,
                 MaxCapacity = roomDto.MaxCapacity <= 0 ? 1 : roomDto.MaxCapacity,
                 Status = roomDto.Status,
+                HoldExpiresAt = roomDto.HoldExpiresAt,
                 MaintenanceEndDate = roomDto.MaintenanceEndDate,
                 Description = roomDto.Description,
-                ImageUrl = roomDto.ImageUrl,
+                ImageUrl = SerializeImageUrls(imageUrls),
+                Amenities = roomDto.Amenities ?? Array.Empty<string>(),
                 CurrentResident = roomDto.CurrentResident,
-                IsActive = roomDto.IsActive
+                IsActive = true
             };
 
             _context.Rooms.Add(room);
             await _context.SaveChangesAsync();
 
-            roomDto.Id = room.Id;
-            return roomDto;
+            return MapToRoomDto(room);
         }
 
         public async Task<bool> UpdateRoomAsync(int id, RoomDto roomDto)
         {
             var room = await _context.Rooms.FindAsync(id);
             if (room == null) return false;
+
+            var imageUrls = NormalizeImageUrls(roomDto.ImageUrls, roomDto.ImageUrl);
 
             // Validate status changes
             if (room.Status == "Occupied" && roomDto.Status == "Maintenance")
@@ -77,11 +88,12 @@ namespace SORMS.API.Services
             room.Area = roomDto.Area;
             room.MaxCapacity = roomDto.MaxCapacity <= 0 ? 1 : roomDto.MaxCapacity;
             room.Status = roomDto.Status;
+            room.HoldExpiresAt = roomDto.HoldExpiresAt;
             room.MaintenanceEndDate = roomDto.MaintenanceEndDate;
             room.Description = roomDto.Description;
-            room.ImageUrl = roomDto.ImageUrl;
+            room.ImageUrl = SerializeImageUrls(imageUrls);
+            room.Amenities = roomDto.Amenities ?? Array.Empty<string>();
             room.CurrentResident = roomDto.CurrentResident;
-            room.IsActive = roomDto.IsActive;
 
             await _context.SaveChangesAsync();
             return true;
@@ -96,21 +108,31 @@ namespace SORMS.API.Services
             if (room.Status == "Occupied")
                 throw new InvalidOperationException("Khong the xoa phong dang co nguoi thue.");
 
-            // Kiểm tra xem có lịch sử check-in không
-            var hasCheckInHistory = await _context.CheckInRecords.AnyAsync(c => c.RoomId == id);
+            var reviews = await _context.Reviews.Where(r => r.RoomId == id).ToListAsync();
+            if (reviews.Count > 0)
+            {
+                _context.Reviews.RemoveRange(reviews);
+            }
 
-            if (hasCheckInHistory)
+            var checkInRecords = await _context.CheckInRecords.Where(c => c.RoomId == id).ToListAsync();
+            if (checkInRecords.Count > 0)
             {
-                // Nếu có lịch sử -> Soft Delete (giữ lại dữ liệu)
-                room.IsActive = false;
-                room.Status = "Maintenance"; // Logically hide it
-                _context.Rooms.Update(room);
+                _context.CheckInRecords.RemoveRange(checkInRecords);
             }
-            else
+
+            var invoices = await _context.Invoices.Where(i => i.RoomId == id).ToListAsync();
+            foreach (var invoice in invoices)
             {
-                // Nếu không có lịch sử gì -> Hard Delete (xóa hẳn khỏi database)
-                _context.Rooms.Remove(room);
+                invoice.RoomId = null;
             }
+
+            var residents = await _context.Residents.Where(r => r.RoomId == id).ToListAsync();
+            foreach (var resident in residents)
+            {
+                resident.RoomId = null;
+            }
+
+            _context.Rooms.Remove(room);
 
             await _context.SaveChangesAsync();
             return true;
@@ -120,6 +142,7 @@ namespace SORMS.API.Services
         {
             var requestedCheckIn = NormalizeUtcDate(checkInDate ?? DateTime.UtcNow);
             var requestedCheckOut = NormalizeUtcDate(checkOutDate ?? requestedCheckIn.AddDays(1));
+            var now = DateTime.UtcNow;
 
             if (requestedCheckOut <= requestedCheckIn)
                 throw new ArgumentException("Check-out date must be greater than check-in date.");
@@ -127,7 +150,10 @@ namespace SORMS.API.Services
             var activeBookingStatuses = new[] { "PendingCheckIn", "CheckedIn", "PendingCheckOut" };
 
             var availableRooms = await _context.Rooms
+                .AsNoTracking()
+                .Include(r => r.Reviews)
                 .Where(r => r.IsActive)
+                .Where(r => r.Status == "Available" || (r.Status == "OnHold" && r.HoldExpiresAt.HasValue && r.HoldExpiresAt.Value <= now))
                 .Where(r => r.Status != "Maintenance" || !r.MaintenanceEndDate.HasValue || r.MaintenanceEndDate.Value.Date <= requestedCheckIn)
                 .Where(r => !_context.CheckInRecords.Any(c =>
                     c.RoomId == r.Id &&
@@ -144,8 +170,70 @@ namespace SORMS.API.Services
             return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
         }
 
+        private static string[] ParseImageUrls(string? storedValue)
+        {
+            if (string.IsNullOrWhiteSpace(storedValue))
+                return Array.Empty<string>();
+
+            var trimmed = storedValue.Trim();
+            if (trimmed.StartsWith("["))
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<string[]>(trimmed);
+                    if (parsed != null)
+                    {
+                        return parsed.Where(url => !string.IsNullOrWhiteSpace(url)).Select(url => url.Trim()).Distinct().ToArray();
+                    }
+                }
+                catch (JsonException)
+                {
+                }
+            }
+
+            return new[] { trimmed };
+        }
+
+        private static string[] NormalizeImageUrls(IEnumerable<string>? imageUrls, string? fallbackImageUrl)
+        {
+            var normalized = (imageUrls ?? Array.Empty<string>())
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct()
+                .ToList();
+
+            if (normalized.Count == 0 && !string.IsNullOrWhiteSpace(fallbackImageUrl))
+            {
+                normalized.AddRange(ParseImageUrls(fallbackImageUrl));
+            }
+
+            return normalized.Where(url => !string.IsNullOrWhiteSpace(url)).Distinct().ToArray();
+        }
+
+        private static string? SerializeImageUrls(IEnumerable<string> imageUrls)
+        {
+            var normalized = imageUrls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct()
+                .ToArray();
+
+            if (normalized.Length == 0)
+                return null;
+
+            if (normalized.Length == 1)
+                return normalized[0];
+
+            return JsonSerializer.Serialize(normalized);
+        }
+
         private static RoomDto MapToRoomDto(Room room)
         {
+            var imageUrls = ParseImageUrls(room.ImageUrl);
+            var visibleReviews = room.Reviews?.Where(review => !review.IsHidden).ToList() ?? new List<Review>();
+            var reviewCount = visibleReviews.Count;
+            var averageRating = reviewCount == 0 ? 0 : Math.Round(visibleReviews.Average(review => review.Rating), 2);
+
             return new RoomDto
             {
                 Id = room.Id,
@@ -157,10 +245,15 @@ namespace SORMS.API.Services
                 Area = room.Area,
                 MaxCapacity = room.MaxCapacity > 0 ? room.MaxCapacity : 1,
                 Status = room.Status,
+                HoldExpiresAt = room.HoldExpiresAt,
                 MaintenanceEndDate = room.MaintenanceEndDate,
                 CurrentResident = room.CurrentResident,
                 Description = room.Description,
-                ImageUrl = room.ImageUrl,
+                ImageUrl = imageUrls.FirstOrDefault(),
+                ImageUrls = imageUrls,
+                Amenities = room.Amenities ?? Array.Empty<string>(),
+                AverageRating = averageRating,
+                ReviewCount = reviewCount,
                 IsActive = room.IsActive
             };
         }

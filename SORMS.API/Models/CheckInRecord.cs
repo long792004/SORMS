@@ -56,5 +56,7 @@ namespace SORMS.API.Models
 
         [Required, MaxLength(20)]
         public string RequestType { get; set; } // CheckIn, CheckOut
+
+        public Review? Review { get; set; }
     }
 }

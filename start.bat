@@ -5,10 +5,10 @@ echo =======================================================
 echo.
 
 echo [1/2] Dang khoi dong Backend (ASP.NET Core API)...
-start "SORMS Backend (API)" cmd /c "title SORMS Backend API && cd SORMS.API && dotnet run"
+start "SORMS Backend (API)" cmd /c "title SORMS Backend API && cd SORMS.API && set ASPNETCORE_ENVIRONMENT=Development && set ASPNETCORE_URLS=http://localhost:5183 && dotnet run"
 
 echo [2/2] Dang khoi dong Frontend (React + Vite)...
-start "SORMS Frontend (UI)" cmd /c "title SORMS Frontend UI && cd sorms-fe && npm run dev"
+start "SORMS Frontend (UI)" cmd /c "title SORMS Frontend UI && cd sorms-fe && set VITE_API_BASE_URL=http://localhost:5183/api && set VITE_API_ORIGIN=http://localhost:5183 && npm run dev"
 
 echo.
 echo =======================================================

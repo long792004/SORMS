@@ -20,6 +20,14 @@ namespace SORMS.API.Models
         [MaxLength(20), Phone]
         public string Phone { get; set; }
 
+        [MaxLength(20)]
+        public string? IdentityNumber { get; set; }
+
+        [MaxLength(10)]
+        public string? Gender { get; set; }
+
+        public DateTime? DateOfBirth { get; set; }
+
         // 1 Staff - N ServiceRequests
         public ICollection<ServiceRequest> AssignedRequests { get; set; } = new List<ServiceRequest>();
 

@@ -66,6 +66,9 @@ namespace SORMS.API.Services
             if (room.Status == "Maintenance" && (!room.MaintenanceEndDate.HasValue || room.MaintenanceEndDate.Value.Date > requestedCheckIn))
                 throw new Exception("Phòng đang bảo trì trong khoảng thời gian bạn chọn.");
 
+            if (room.Status == "OnHold" && room.HoldExpiresAt.HasValue && room.HoldExpiresAt.Value > DateTime.UtcNow)
+                throw new Exception("Phòng đang được giữ chỗ bởi người dùng khác. Vui lòng thử lại sau.");
+
             var effectiveMaxCapacity = room.MaxCapacity > 0 ? room.MaxCapacity : 1;
             if (numberOfResidents > effectiveMaxCapacity)
                 throw new Exception($"Số lượng người ở không được vượt quá sức chứa tối đa của phòng ({effectiveMaxCapacity}).");
@@ -124,6 +127,8 @@ namespace SORMS.API.Services
                 ResidentId = residentId,
                 RoomId = roomId,
                 Amount = dailyRate * numberOfNights,
+                DiscountAmount = 0,
+                TotalAmount = dailyRate * numberOfNights,
                 Status = "Pending",
                 Description = $"Booking fee for room {room.RoomNumber}: {numberOfNights} night(s) x {dailyRate:N0}/day",
                 CreatedAt = DateTime.UtcNow
@@ -346,7 +351,7 @@ namespace SORMS.API.Services
                 await _notificationService.CreateNotificationAsync(new NotificationDto
                 {
                     ResidentId = record.ResidentId,
-                    Message = $"Yêu cầu check-out khỏi phòng {record.Room.RoomNumber} đã được phê duyệt",
+                    Message = $"Checkout thành công cho phòng {record.Room.RoomNumber}. Hãy feedback trải nghiệm phòng của bạn. CHECKIN_ID:{record.Id}",
                     CreatedAt = DateTime.UtcNow,
                     IsRead = false
                 });

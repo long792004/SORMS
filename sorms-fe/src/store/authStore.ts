@@ -1,51 +1,47 @@
-import { create } from 'zustand';
-
-interface User {
-  userId: number;
-  username: string;
-  email: string;
-  userRole: string;
-}
+import { create } from "zustand";
+import { STORAGE_KEYS } from "@/utils/constants";
+import { UserRole } from "@/types/common";
 
 interface AuthState {
   token: string | null;
-  user: User | null;
+  role: UserRole | null;
+  userId: number | null;
   isAuthenticated: boolean;
-  login: (token: string, user: User) => void;
-  logout: () => void;
-  isAdmin: () => boolean;
-  isStaff: () => boolean;
-  isResident: () => boolean;
-  hasRole: (...roles: string[]) => boolean;
+  setAuth: (payload: { token: string; role: UserRole | null; userId: number | null }) => void;
+  clearAuth: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => {
-  const storedToken = localStorage.getItem('token');
-  const storedUser = localStorage.getItem('user');
+const token = localStorage.getItem(STORAGE_KEYS.token);
+const role = (localStorage.getItem(STORAGE_KEYS.role) as UserRole | null) ?? null;
+const userIdRaw = localStorage.getItem(STORAGE_KEYS.userId);
 
-  return {
-    token: storedToken,
-    user: storedUser ? JSON.parse(storedUser) : null,
-    isAuthenticated: !!storedToken,
+export const useAuthStore = create<AuthState>((set) => ({
+  token,
+  role,
+  userId: userIdRaw ? Number(userIdRaw) : null,
+  isAuthenticated: !!token,
+  setAuth: ({ token: nextToken, role: nextRole, userId: nextUserId }) => {
+    localStorage.setItem(STORAGE_KEYS.token, nextToken);
+    if (nextRole) localStorage.setItem(STORAGE_KEYS.role, nextRole);
+    if (nextUserId !== null) localStorage.setItem(STORAGE_KEYS.userId, String(nextUserId));
 
-    login: (token, user) => {
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      set({ token, user, isAuthenticated: true });
-    },
+    set({
+      token: nextToken,
+      role: nextRole,
+      userId: nextUserId,
+      isAuthenticated: true
+    });
+  },
+  clearAuth: () => {
+    localStorage.removeItem(STORAGE_KEYS.token);
+    localStorage.removeItem(STORAGE_KEYS.role);
+    localStorage.removeItem(STORAGE_KEYS.userId);
 
-    logout: () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      set({ token: null, user: null, isAuthenticated: false });
-    },
-
-    isAdmin: () => get().user?.userRole === 'Admin',
-    isStaff: () => get().user?.userRole === 'Staff',
-    isResident: () => get().user?.userRole === 'Resident',
-    hasRole: (...roles) => {
-      const role = get().user?.userRole;
-      return role ? roles.includes(role) : false;
-    },
-  };
-});
+    set({
+      token: null,
+      role: null,
+      userId: null,
+      isAuthenticated: false
+    });
+  }
+}));

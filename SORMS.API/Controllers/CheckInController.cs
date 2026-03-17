@@ -30,14 +30,11 @@ namespace SORMS.API.Controllers
                 // Log tất cả claims để debug
                 var allClaims = string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}"));
                 Console.WriteLine($"[CheckIn API] All Claims: {allClaims}");
-                
-                var residentIdClaim = User.FindFirst("ResidentId");
-                Console.WriteLine($"[CheckIn API] ResidentId Claim: {residentIdClaim?.Value ?? "NULL"}");
-                
-                var residentId = int.Parse(residentIdClaim?.Value ?? "0");
+
+                var residentId = await ResolveResidentIdAsync();
                 if (residentId == 0)
                 {
-                    Console.WriteLine("[CheckIn API] ERROR: ResidentId = 0, không tìm thấy claim ResidentId");
+                    Console.WriteLine("[CheckIn API] ERROR: ResidentId = 0, không tìm thấy resident hợp lệ cho user hiện tại");
                     return BadRequest(new { success = false, message = "Không tìm thấy thông tin resident. Vui lòng logout và login lại." });
                 }
 
@@ -70,9 +67,9 @@ namespace SORMS.API.Controllers
         {
             try
             {
-                var residentId = int.Parse(User.FindFirst("ResidentId")?.Value ?? "0");
+                var residentId = await ResolveResidentIdAsync();
                 if (residentId == 0)
-                    return BadRequest("Không tìm thấy thông tin resident");
+                    return BadRequest(new { success = false, message = "Không tìm thấy thông tin resident" });
 
                 var result = await _checkInService.CreateCheckOutRequestAsync(residentId, request.CheckInRecordId);
                 return Ok(new { 
@@ -96,7 +93,7 @@ namespace SORMS.API.Controllers
         {
             try
             {
-                var residentId = int.Parse(User.FindFirst("ResidentId")?.Value ?? "0");
+                var residentId = await ResolveResidentIdAsync();
                 if (residentId == 0)
                     return BadRequest(new { success = false, message = "Không tìm thấy thông tin resident" });
 
@@ -107,6 +104,23 @@ namespace SORMS.API.Controllers
             {
                 return BadRequest(new { success = false, message = ex.Message });
             }
+        }
+
+        private async Task<int> ResolveResidentIdAsync()
+        {
+            var residentIdClaim = User.FindFirst("ResidentId")?.Value;
+            if (int.TryParse(residentIdClaim, out var residentIdFromClaim) && residentIdFromClaim > 0)
+            {
+                return residentIdFromClaim;
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+            {
+                return 0;
+            }
+
+            return await _checkInService.GetResidentIdByUserIdAsync(userId);
         }
 
         /// <summary>

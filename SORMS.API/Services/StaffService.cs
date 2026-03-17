@@ -23,7 +23,10 @@ namespace SORMS.API.Services
                     Id = s.Id,
                     FullName = s.FullName,
                     Email = s.Email,
-                    Phone = s.Phone
+                    Phone = s.Phone,
+                    IdentityNumber = s.IdentityNumber,
+                    Gender = s.Gender,
+                    DateOfBirth = s.DateOfBirth
                 })
                 .ToListAsync();
         }
@@ -38,7 +41,10 @@ namespace SORMS.API.Services
                 Id = staff.Id,
                 FullName = staff.FullName,
                 Email = staff.Email,
-                Phone = staff.Phone
+                Phone = staff.Phone,
+                IdentityNumber = staff.IdentityNumber,
+                Gender = staff.Gender,
+                DateOfBirth = staff.DateOfBirth
             };
         }
 
@@ -50,6 +56,9 @@ namespace SORMS.API.Services
             staff.FullName = staffDto.FullName;
             staff.Email = staffDto.Email;
             staff.Phone = staffDto.Phone;
+            staff.IdentityNumber = staffDto.IdentityNumber;
+            staff.Gender = staffDto.Gender;
+            staff.DateOfBirth = staffDto.DateOfBirth;
 
             _context.Staffs.Update(staff);
             await _context.SaveChangesAsync();

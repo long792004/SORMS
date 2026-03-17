@@ -49,11 +49,25 @@ namespace SORMS.API.Controllers
             if (notificationDto.ResidentId == null)
                 return BadRequest("ResidentId là bắt buộc khi tạo individual notification");
 
-            var created = await _notificationService.CreateNotificationAsync(notificationDto);
-            return Ok(new { 
-                message = "Notification đã được gửi thành công", 
-                notification = created 
-            });
+            if (notificationDto.ResidentId <= 0)
+                return BadRequest("ResidentId phải lớn hơn 0");
+
+            try
+            {
+                var created = await _notificationService.CreateNotificationAsync(notificationDto);
+                return Ok(new {
+                    message = "Notification đã được gửi thành công",
+                    notification = created
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
         }
 
         /// <summary>
