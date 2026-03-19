@@ -12,7 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { RatingStars } from "@/components/ui/RatingStars";
 import { reviewApi } from "@/api/reviewApi";
 import { roomApi } from "@/api/roomApi";
-import { useAvailableRooms, useRoomDetail, useRoomReviews } from "@/hooks/useRooms";
+import { useRoomDetail, useRoomReviews } from "@/hooks/useRooms";
 import Tooltip from '@mui/material/Tooltip';
 import { useAuthStore } from "@/store/authStore";
 import { getRoomImageUrls } from "@/utils/media";
@@ -56,7 +56,13 @@ function getReviewRoomName(review: any) {
 export function HomePage() {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { data, isLoading } = useAvailableRooms();
+  const { data, isLoading } = useQuery({
+    queryKey: ["rooms", "all", "homepage"],
+    queryFn: async () => {
+      const response = await roomApi.getRooms();
+      return response.data?.data ?? response.data;
+    }
+  });
   const { data: recentReviewsData } = useQuery({
     queryKey: ["reviews", "public", "recent"],
     retry: false,
@@ -139,6 +145,7 @@ export function HomePage() {
               location={room.location ?? "SORM Residence"}
               imageUrl={getRoomImageUrls(room)[0]}
               status={room.status ?? "Available"}
+              holdExpiresAt={room.holdExpiresAt}
               onView={() => navigate(`/rooms/${getRoomId(room)}`)}
               onBook={() => handleBookFromCard(room)}
             />
@@ -279,6 +286,7 @@ export function RoomListPage() {
               location={room.location ?? "SORM Residence"}
               imageUrl={getRoomImageUrls(room)[0]}
               status={room.status ?? "Available"}
+              holdExpiresAt={room.holdExpiresAt}
               onView={() => navigate(`/rooms/${getRoomId(room)}`)}
               onBook={() => handleBookFromCard(room)}
             />
@@ -501,7 +509,13 @@ export const RoomAvailabilityPage = () => (
 export function SearchResultsPage() {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const { data } = useAvailableRooms();
+  const { data } = useQuery({
+    queryKey: ["rooms", "all", "search"],
+    queryFn: async () => {
+      const response = await roomApi.getRooms();
+      return response.data?.data ?? response.data;
+    }
+  });
   const rooms = useMemo(() => toRoomList(data), [data]);
 
   const handleBookFromCard = (room: any) => {
@@ -533,6 +547,7 @@ export function SearchResultsPage() {
             location={room.location ?? "SORM Residence"}
             imageUrl={getRoomImageUrls(room)[0]}
             status={room.status ?? "Available"}
+            holdExpiresAt={room.holdExpiresAt}
             onView={() => navigate(`/rooms/${getRoomId(room)}`)}
             onBook={() => handleBookFromCard(room)}
           />

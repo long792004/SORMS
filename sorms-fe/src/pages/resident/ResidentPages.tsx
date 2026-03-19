@@ -293,7 +293,7 @@ export function ResidentCheckinStatusPage() {
       <article className="glass-card rounded-xl p-4">
         <p className="muted-text">Current Status</p>
         <p className="mt-2 text-lg font-semibold text-primary">{statusData?.status ?? "No active record"}</p>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Luồng chuẩn: gửi yêu cầu check-in → hệ thống giữ phòng 15 phút → thanh toán invoice → Staff/Admin phê duyệt thì check-in mới thành công.</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Luồng chuẩn: gửi yêu cầu check-in → hệ thống giữ phòng 6 phút → thanh toán invoice → Staff/Admin phê duyệt thì check-in mới thành công.</p>
         {pendingInvoice ? (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
             <span>
@@ -310,7 +310,7 @@ export function ResidentCheckinStatusPage() {
         <div className="glass-card rounded-xl p-4">
           <h3 className="font-semibold">Request Check-in</h3>
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Sau khi gửi yêu cầu, phòng sẽ ở trạng thái OnHold trong 15 phút để bạn hoàn tất thanh toán.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Sau khi gửi yêu cầu, phòng sẽ ở trạng thái OnHold trong 6 phút để bạn hoàn tất thanh toán.</p>
             <input type="date" value={checkInDate} onChange={(event) => setCheckInDate(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
             <input type="date" value={checkOutDate} onChange={(event) => setCheckOutDate(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
             <select value={roomId} onChange={(event) => setRoomId(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-100">

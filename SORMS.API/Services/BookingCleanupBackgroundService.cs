@@ -78,7 +78,7 @@ namespace SORMS.API.Services
 
                     if (holdExpiresAt.HasValue)
                     {
-                        var holdStartedAt = holdExpiresAt.Value.AddMinutes(-15);
+                        var holdStartedAt = holdExpiresAt.Value.AddMinutes(-6);
                         var pendingInvoice = await dbContext.Invoices
                             .Where(i => i.RoomId == room.Id
                                         && i.Status == "Pending"

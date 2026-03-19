@@ -309,7 +309,7 @@ namespace SORMS.API.Services
                     invoice,
                     returnUrl,
                     cancelUrl,
-                    DateTime.UtcNow.AddMinutes(15));
+                    DateTime.UtcNow.AddMinutes(6));
             }
             catch (Exception ex)
             {
@@ -372,7 +372,7 @@ namespace SORMS.API.Services
                 if (roomAlreadyBooked)
                     throw new InvalidOperationException("Room is currently held by another user");
 
-                var holdExpiresAt = now.AddMinutes(15);
+                var holdExpiresAt = now.AddMinutes(6);
                 room.Status = "OnHold";
                 room.HoldExpiresAt = holdExpiresAt;
 
