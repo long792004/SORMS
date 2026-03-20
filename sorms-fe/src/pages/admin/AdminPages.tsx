@@ -560,26 +560,58 @@ export function AdminRoomsPage() {
       <h1 className="section-title">Rooms Management</h1>
       <div className="glass-card rounded-xl p-4">
         <h3 className="font-semibold">Create Room</h3>
-        <div className="mt-2 grid gap-2 md:grid-cols-4">
-          <input value={createForm.roomNumber} onChange={(event) => setCreateForm((prev) => ({ ...prev, roomNumber: event.target.value }))} placeholder="Room number" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <select value={createForm.roomType} onChange={(event) => setCreateForm((prev) => ({ ...prev, roomType: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
-            <option value="">-- Room type --</option>
-            {roomTypeOptions.map((roomType) => (<option key={roomType} value={roomType}>{roomType}</option>))}
-          </select>
-          <input value={createForm.floor} onChange={(event) => setCreateForm((prev) => ({ ...prev, floor: event.target.value }))} placeholder="Floor" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.monthlyRent} onChange={(event) => setCreateForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="Monthly rent" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.area} onChange={(event) => setCreateForm((prev) => ({ ...prev, area: event.target.value }))} placeholder="Area (m²)" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.maxCapacity} onChange={(event) => setCreateForm((prev) => ({ ...prev, maxCapacity: event.target.value }))} placeholder="Max capacity" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <select value={createForm.status} onChange={(event) => setCreateForm((prev) => ({ ...prev, status: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
-            <option value="">-- Status --</option>
-            {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
-          </select>
-          <input type="file" accept="image/*" multiple onChange={(event) => setCreateImageFiles(Array.from(event.target.files ?? []))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5 md:col-span-2" />
-          {createForm.imageUrls.length > 0 ? <div className="md:col-span-2 flex flex-wrap gap-2">{createForm.imageUrls.map((imageUrl, index) => <img key={`${imageUrl}-${index}`} src={resolveMediaUrl(imageUrl)} alt={`Room preview ${index + 1}`} className="h-14 w-20 rounded-lg object-cover" />)}</div> : null}
-          {createImageFiles.length > 0 ? <p className="md:col-span-2 text-xs text-slate-500 dark:text-slate-400">Đã chọn {createImageFiles.length} ảnh để upload.</p> : null}
-          <input value={createForm.amenities} onChange={(event) => setCreateForm((prev) => ({ ...prev, amenities: event.target.value }))} placeholder="Amenities (comma separated)" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
-          <input value={createForm.description} onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Description" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5 md:col-span-3" />
-          <Button onClick={() => create.mutate()} disabled={isUploadingImage}>{isUploadingImage ? "Uploading..." : "Create"}</Button>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Số phòng (Room number)</label>
+            <input value={createForm.roomNumber} onChange={(event) => setCreateForm((prev) => ({ ...prev, roomNumber: event.target.value }))} placeholder="VD: 101" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Loại phòng (Room type)</label>
+            <select value={createForm.roomType} onChange={(event) => setCreateForm((prev) => ({ ...prev, roomType: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+              <option value="">-- Room type --</option>
+              {roomTypeOptions.map((roomType) => (<option key={roomType} value={roomType}>{roomType}</option>))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Tầng (Floor)</label>
+            <input value={createForm.floor} onChange={(event) => setCreateForm((prev) => ({ ...prev, floor: event.target.value }))} placeholder="1" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Giá thuê (Monthly rent)</label>
+            <input value={createForm.monthlyRent} onChange={(event) => setCreateForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="3,000,000" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Diện tích (Area m²)</label>
+            <input value={createForm.area} onChange={(event) => setCreateForm((prev) => ({ ...prev, area: event.target.value }))} placeholder="20" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Sức chứa (Capacity)</label>
+            <input value={createForm.maxCapacity} onChange={(event) => setCreateForm((prev) => ({ ...prev, maxCapacity: event.target.value }))} placeholder="1" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Trạng thái (Status)</label>
+            <select value={createForm.status} onChange={(event) => setCreateForm((prev) => ({ ...prev, status: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+              <option value="">-- Status --</option>
+              {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Tiện ích (Amenities)</label>
+            <input value={createForm.amenities} onChange={(event) => setCreateForm((prev) => ({ ...prev, amenities: event.target.value }))} placeholder="Wifi, AC, TV..." className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-3">
+            <label className="text-xs font-medium text-slate-500">Mô tả (Description)</label>
+            <input value={createForm.description} onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Mô tả về phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <label className="text-xs font-medium text-slate-500">Hình ảnh (Room Images)</label>
+            <input type="file" accept="image/*" multiple onChange={(event) => setCreateImageFiles(Array.from(event.target.files ?? []))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
+            {createForm.imageUrls.length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{createForm.imageUrls.map((imageUrl, index) => <img key={`${imageUrl}-${index}`} src={resolveMediaUrl(imageUrl)} alt={`Room preview ${index + 1}`} className="h-14 w-20 rounded-lg object-cover" />)}</div> : null}
+            {createImageFiles.length > 0 ? <p className="text-[10px] text-slate-500 dark:text-slate-400">Đã chọn {createImageFiles.length} ảnh để upload.</p> : null}
+          </div>
+          <div className="flex items-end lg:col-start-4">
+            <Button className="w-full h-10" onClick={() => create.mutate()} disabled={isUploadingImage}>{isUploadingImage ? "Uploading..." : "Tạo (Create)"}</Button>
+          </div>
         </div>
       </div>
 

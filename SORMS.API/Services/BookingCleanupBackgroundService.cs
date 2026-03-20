@@ -1,16 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using SORMS.API.Data;
+using SORMS.API.Interfaces;
+using SORMS.API.DTOs;
 
 namespace SORMS.API.Services
 {
-    public class BookingCleanupBackgroundService : BackgroundService
+    public class BookingManagementBackgroundService : BackgroundService
     {
         private readonly IServiceProvider _serviceProvider;
-        private readonly ILogger<BookingCleanupBackgroundService> _logger;
+        private readonly ILogger<BookingManagementBackgroundService> _logger;
 
-        public BookingCleanupBackgroundService(
+        public BookingManagementBackgroundService(
             IServiceProvider serviceProvider,
-            ILogger<BookingCleanupBackgroundService> logger)
+            ILogger<BookingManagementBackgroundService> logger)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
@@ -18,7 +20,7 @@ namespace SORMS.API.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Booking cleanup background service is starting.");
+            _logger.LogInformation("Booking management background service is starting.");
 
             using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
 
@@ -27,6 +29,7 @@ namespace SORMS.API.Services
                 try
                 {
                     await CleanupExpiredHoldsAsync(stoppingToken);
+                    await AutoCheckOutExpiredStaysAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -47,7 +50,7 @@ namespace SORMS.API.Services
                 }
             }
 
-            _logger.LogInformation("Booking cleanup background service is stopping.");
+            _logger.LogInformation("Booking management background service is stopping.");
         }
 
         private async Task CleanupExpiredHoldsAsync(CancellationToken cancellationToken)
@@ -103,6 +106,71 @@ namespace SORMS.API.Services
 
             await dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Booking cleanup released {Count} expired hold(s).", releasedCount);
+        }
+
+        private async Task AutoCheckOutExpiredStaysAsync(CancellationToken cancellationToken)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SormsDbContext>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var now = DateTime.UtcNow;
+
+            // Tìm các record CheckedIn hoặc PendingCheckOut đã quá ngày ExpectedCheckOutDate
+            var expiredStays = await dbContext.CheckInRecords
+                .Include(r => r.Room)
+                .Include(r => r.Resident)
+                .Where(r => (r.Status == "CheckedIn" || r.Status == "PendingCheckOut") 
+                         && r.ExpectedCheckOutDate <= now)
+                .ToListAsync(cancellationToken);
+
+            if (expiredStays.Count == 0) return;
+
+            var checkoutCount = 0;
+            foreach (var record in expiredStays)
+            {
+                try
+                {
+                    // Cập nhật trạng thái record
+                    record.Status = "CheckedOut";
+                    record.CheckOutTime = now;
+                    
+                    // Cập nhật trạng thái phòng
+                    if (record.Room != null)
+                    {
+                        record.Room.Status = "Available";
+                        record.Room.CurrentResident = null;
+                        record.Room.HoldExpiresAt = null;
+                    }
+
+                    // Cập nhật thông tin Resident
+                    if (record.Resident != null)
+                    {
+                        record.Resident.RoomId = null;
+                        record.Resident.CheckOutDate = now;
+
+                        // Gửi thông báo
+                        await notificationService.CreateNotificationAsync(new NotificationDto
+                        {
+                            ResidentId = record.Resident.Id,
+                            Message = $"Checkout tự động thành công cho phòng {record.Room?.RoomNumber}. Hãy feedback trải nghiệm của bạn. CHECKIN_ID:{record.Id}",
+                            CreatedAt = now,
+                            IsRead = false
+                        });
+                    }
+
+                    checkoutCount++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to auto-checkout record {RecordId}", record.Id);
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            if (checkoutCount > 0)
+            {
+                _logger.LogInformation("Auto-checkout processed {Count} expired stay(s).", checkoutCount);
+            }
         }
     }
 }

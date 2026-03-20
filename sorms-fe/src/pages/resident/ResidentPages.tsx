@@ -315,9 +315,11 @@ export function ResidentCheckinStatusPage() {
             <input type="date" value={checkOutDate} onChange={(event) => setCheckOutDate(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
             <select value={roomId} onChange={(event) => setRoomId(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-100">
               <option value="">Chọn phòng khả dụng</option>
-              {availableRooms.map((room: any) => (
-                <option key={room.id} value={room.id}>Room {room.roomNumber} - {room.type} - {Number(room.monthlyRent ?? 0).toLocaleString("vi-VN")} VND</option>
-              ))}
+              {availableRooms
+                .filter((room: any) => room.status === "Available")
+                .map((room: any) => (
+                  <option key={room.id} value={room.id}>Room {room.roomNumber} - {room.type} - {Number(room.monthlyRent ?? 0).toLocaleString("vi-VN")} VND</option>
+                ))}
             </select>
             <input
               value={numberOfResidents}

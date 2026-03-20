@@ -353,22 +353,51 @@ export function StaffRoomsPage() {
       <h1 className="section-title">Rooms Management</h1>
       <div className="glass-card rounded-xl p-4">
         <h3 className="font-semibold">Create Room</h3>
-        <div className="mt-2 grid gap-2 md:grid-cols-4">
-          <input value={roomForm.roomNumber} onChange={(event) => setRoomForm((prev) => ({ ...prev, roomNumber: event.target.value }))} placeholder="Room number" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <select value={roomForm.roomType} onChange={(event) => setRoomForm((prev) => ({ ...prev, roomType: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
-            {roomTypeOptions.map((roomType) => (<option key={roomType} value={roomType}>{roomType}</option>))}
-          </select>
-          <input value={roomForm.floor} onChange={(event) => setRoomForm((prev) => ({ ...prev, floor: event.target.value }))} placeholder="Floor" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={roomForm.monthlyRent} onChange={(event) => setRoomForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="Monthly rent" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={roomForm.area} onChange={(event) => setRoomForm((prev) => ({ ...prev, area: event.target.value }))} placeholder="Area" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={roomForm.maxCapacity} onChange={(event) => setRoomForm((prev) => ({ ...prev, maxCapacity: event.target.value }))} placeholder="Capacity" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <select value={roomForm.status} onChange={(event) => setRoomForm((prev) => ({ ...prev, status: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
-            {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
-          </select>
-          <input value={roomForm.description} onChange={(event) => setRoomForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Description" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input type="file" accept="image/*" multiple onChange={(event) => setRoomImageFiles(Array.from(event.target.files ?? []))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5 md:col-span-2" />
-          {roomImageFiles.length > 0 ? <p className="md:col-span-2 text-xs text-slate-500 dark:text-slate-400">Đã chọn {roomImageFiles.length} ảnh để upload.</p> : null}
-          <Button onClick={() => createRoom.mutate()} disabled={isUploadingImages}>{isUploadingImages ? "Uploading..." : "Create"}</Button>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Số phòng (Room number)</label>
+            <input value={roomForm.roomNumber} onChange={(event) => setRoomForm((prev) => ({ ...prev, roomNumber: event.target.value }))} placeholder="VD: 101" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Loại phòng (Room type)</label>
+            <select value={roomForm.roomType} onChange={(event) => setRoomForm((prev) => ({ ...prev, roomType: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+              {roomTypeOptions.map((roomType) => (<option key={roomType} value={roomType}>{roomType}</option>))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Tầng (Floor)</label>
+            <input value={roomForm.floor} onChange={(event) => setRoomForm((prev) => ({ ...prev, floor: event.target.value }))} placeholder="1" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Giá thuê (Monthly rent)</label>
+            <input value={roomForm.monthlyRent} onChange={(event) => setRoomForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="3,000,000" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Diện tích (Area m²)</label>
+            <input value={roomForm.area} onChange={(event) => setRoomForm((prev) => ({ ...prev, area: event.target.value }))} placeholder="20" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Sức chứa (Capacity)</label>
+            <input value={roomForm.maxCapacity} onChange={(event) => setRoomForm((prev) => ({ ...prev, maxCapacity: event.target.value }))} placeholder="1" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Trạng thái (Status)</label>
+            <select value={roomForm.status} onChange={(event) => setRoomForm((prev) => ({ ...prev, status: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+              {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Mô tả (Description)</label>
+            <input value={roomForm.description} onChange={(event) => setRoomForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Mô tả về phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <label className="text-xs font-medium text-slate-500">Hình ảnh (Room Images)</label>
+            <input type="file" accept="image/*" multiple onChange={(event) => setRoomImageFiles(Array.from(event.target.files ?? []))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
+            {roomImageFiles.length > 0 ? <p className="text-[10px] text-slate-500 dark:text-slate-400">Đã chọn {roomImageFiles.length} ảnh để upload.</p> : null}
+          </div>
+          <div className="flex items-end md:col-span-2">
+            <Button className="w-full h-10" onClick={() => createRoom.mutate()} disabled={isUploadingImages}>{isUploadingImages ? "Uploading..." : "Tạo phòng mới (Create Room)"}</Button>
+          </div>
         </div>
       </div>
       <div className="grid gap-2 md:grid-cols-2">
