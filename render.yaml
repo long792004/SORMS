@@ -27,6 +27,9 @@ services:
       - key: Jwt__Audience
         value: SORMSUsers
 
+      - key: Jwt__ExpiryMinutes
+        value: 1440
+
       - key: AdminAccount__Username
         value: admin
 
@@ -55,4 +58,25 @@ services:
         sync: false
 
       - key: PublicApiUrl
+        sync: false
+
+      - key: GeminiApiKey
+        sync: false
+
+      - key: GeminiModel
+        value: gemini-2.0-flash
+
+      - key: Smtp__Host
+        value: smtp.gmail.com
+
+      - key: Smtp__Port
+        value: 587
+
+      - key: Smtp__Username
+        sync: false
+
+      - key: Smtp__Password
+        sync: false
+
+      - key: Smtp__From
         sync: false
