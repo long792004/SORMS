@@ -30,6 +30,7 @@ namespace SORMS.API.Services
                 {
                     await CleanupExpiredHoldsAsync(stoppingToken);
                     await AutoCheckOutExpiredStaysAsync(stoppingToken);
+                    await AutoReleaseMaintenanceRoomsAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -166,10 +167,44 @@ namespace SORMS.API.Services
                 }
             }
 
-            await dbContext.SaveChangesAsync(cancellationToken);
             if (checkoutCount > 0)
             {
                 _logger.LogInformation("Auto-checkout processed {Count} expired stay(s).", checkoutCount);
+            }
+        }
+
+        private async Task AutoReleaseMaintenanceRoomsAsync(CancellationToken cancellationToken)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SormsDbContext>();
+            var now = DateTime.UtcNow;
+
+            // Tìm các phòng đang bảo trì và đã quá ngày kết thúc
+            var finishedMaintenance = await dbContext.Rooms
+                .Where(r => r.Status == "Maintenance" && r.MaintenanceEndDate.HasValue && r.MaintenanceEndDate.Value <= now)
+                .ToListAsync(cancellationToken);
+
+            if (finishedMaintenance.Count == 0) return;
+
+            var releasedCount = 0;
+            foreach (var room in finishedMaintenance)
+            {
+                try
+                {
+                    room.Status = "Available";
+                    room.MaintenanceEndDate = null;
+                    releasedCount++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to release maintenance for room {RoomId}", room.Id);
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            if (releasedCount > 0)
+            {
+                _logger.LogInformation("Auto-released {Count} room(s) from maintenance.", releasedCount);
             }
         }
     }

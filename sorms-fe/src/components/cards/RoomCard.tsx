@@ -59,9 +59,12 @@ function StatusBadge({ status, holdExpiresAt }: { status: string; holdExpiresAt?
   }
 
   if (status === "Maintenance") {
+    const isPast = holdExpiresAt ? new Date(holdExpiresAt).getTime() <= Date.now() : false;
+    const formattedDate = holdExpiresAt ? new Date(holdExpiresAt).toLocaleDateString("vi-VN") : "";
+    
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 border border-slate-400/30">
-        Bảo trì
+        Bảo trì {formattedDate ? `đến ${formattedDate}` : ""}
       </span>
     );
   }

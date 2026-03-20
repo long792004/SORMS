@@ -287,7 +287,8 @@ export function StaffRoomsPage() {
     maxCapacity: "1",
     status: "Available",
     description: "",
-    imageUrls: [] as string[]
+    imageUrls: [] as string[],
+    maintenanceEndDate: ""
   });
   const [roomImageFiles, setRoomImageFiles] = useState<File[]>([]);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
@@ -323,6 +324,7 @@ export function StaffRoomsPage() {
         maxCapacity: Number(roomForm.maxCapacity),
         status: roomForm.status,
         description: roomForm.description,
+        maintenanceEndDate: roomForm.status === "Maintenance" && roomForm.maintenanceEndDate ? new Date(roomForm.maintenanceEndDate).toISOString() : null,
         imageUrl: imageUrls[0] ?? null,
         imageUrls,
         amenities: []
@@ -339,12 +341,20 @@ export function StaffRoomsPage() {
         maxCapacity: "1",
         status: "Available",
         description: "",
-        imageUrls: []
+        imageUrls: [],
+        maintenanceEndDate: ""
       });
       setRoomImageFiles([]);
     },
     onSettled: () => {
       setIsUploadingImages(false);
+    }
+  });
+
+  const updateRoom = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: any }) => roomApi.updateRoom(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff", "rooms"] });
     }
   });
 
@@ -386,6 +396,12 @@ export function StaffRoomsPage() {
               {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
             </select>
           </div>
+          {roomForm.status === "Maintenance" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-500 text-amber-500">Ngày xong (Expected End Date)</label>
+              <input type="date" value={roomForm.maintenanceEndDate} onChange={(event) => setRoomForm((prev) => ({ ...prev, maintenanceEndDate: event.target.value }))} className="h-10 rounded-xl border border-amber-500/50 bg-white px-3 dark:bg-white/5" />
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">Mô tả (Description)</label>
             <input value={roomForm.description} onChange={(event) => setRoomForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Mô tả về phòng" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
@@ -406,7 +422,20 @@ export function StaffRoomsPage() {
             {getRoomImageUrls(room)[0] ? <img src={resolveMediaUrl(getRoomImageUrls(room)[0])} alt={`Room ${room.roomNumber}`} className="mb-3 h-32 w-full rounded-lg object-cover" /> : null}
             <p className="font-semibold">Room {room.roomNumber}</p>
             <p className="muted-text">{room.roomType ?? room.type} • Floor {room.floor ?? "-"} • {Number(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND</p>
-            <p className="muted-text">Status: {room.status ?? "-"} • Capacity: {room.maxCapacity ?? "-"}</p>
+            <p className="muted-text">
+              Status: <span className={room.status === "Maintenance" ? "text-amber-500 font-medium" : ""}>{room.status ?? "-"}</span> 
+              {room.status === "Maintenance" && room.maintenanceEndDate && ` • Dự kiến xong: ${formatDateTime(room.maintenanceEndDate)}`}
+              {room.status !== "Maintenance" && ` • Capacity: ${room.maxCapacity ?? "-"}`}
+            </p>
+            {room.status === "Maintenance" && (
+              <Button 
+                variant="ghost" 
+                className="mt-2 w-full text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10"
+                onClick={() => updateRoom.mutate({ id: room.id, payload: { ...room, status: "Available", maintenanceEndDate: null } })}
+              >
+                Hoàn thành bảo trì (Mark Completed)
+              </Button>
+            )}
           </article>
         ))}
       </div>

@@ -441,7 +441,8 @@ export function AdminRoomsPage() {
     status: "",
     description: "",
     imageUrls: [] as string[],
-    amenities: ""
+    amenities: "",
+    maintenanceEndDate: ""
   });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
@@ -454,7 +455,8 @@ export function AdminRoomsPage() {
     status: "Available",
     description: "",
     imageUrls: [] as string[],
-    amenities: ""
+    amenities: "",
+    maintenanceEndDate: ""
   });
   const [createImageFiles, setCreateImageFiles] = useState<File[]>([]);
   const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
@@ -470,6 +472,7 @@ export function AdminRoomsPage() {
     maxCapacity: Number(form.maxCapacity),
     status: form.status,
     description: form.description,
+    maintenanceEndDate: form.status === "Maintenance" && form.maintenanceEndDate ? new Date(form.maintenanceEndDate).toISOString() : null,
     imageUrl: form.imageUrls[0] ?? null,
     imageUrls: form.imageUrls,
     amenities: form.amenities
@@ -513,7 +516,8 @@ export function AdminRoomsPage() {
         status: "",
         description: "",
         imageUrls: [],
-        amenities: ""
+        amenities: "",
+        maintenanceEndDate: ""
       });
       setCreateImageFiles([]);
     },
@@ -595,6 +599,12 @@ export function AdminRoomsPage() {
               {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
             </select>
           </div>
+          {createForm.status === "Maintenance" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-amber-500">Ngày xong (Expected End Date)</label>
+              <input type="date" value={createForm.maintenanceEndDate} onChange={(event) => setCreateForm((prev) => ({ ...prev, maintenanceEndDate: event.target.value }))} className="h-10 rounded-xl border border-amber-500/50 bg-white px-3 dark:bg-white/5" />
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">Tiện ích (Amenities)</label>
             <input value={createForm.amenities} onChange={(event) => setCreateForm((prev) => ({ ...prev, amenities: event.target.value }))} placeholder="Wifi, AC, TV..." className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
@@ -630,9 +640,18 @@ export function AdminRoomsPage() {
                   <input value={editForm.monthlyRent} onChange={(event) => setEditForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
                   <input value={editForm.area} onChange={(event) => setEditForm((prev) => ({ ...prev, area: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
                   <input value={editForm.maxCapacity} onChange={(event) => setEditForm((prev) => ({ ...prev, maxCapacity: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-                  <select value={editForm.status} onChange={(event) => setEditForm((prev) => ({ ...prev, status: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
-                    {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
-                  </select>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-500">Trạng thái (Status)</label>
+                    <select value={editForm.status} onChange={(event) => setEditForm((prev) => ({ ...prev, status: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+                      {roomStatusOptions.map((status) => (<option key={status} value={status}>{status}</option>))}
+                    </select>
+                  </div>
+                  {editForm.status === "Maintenance" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-amber-500">Ngày xong (End Date)</label>
+                      <input type="date" value={editForm.maintenanceEndDate} onChange={(event) => setEditForm((prev) => ({ ...prev, maintenanceEndDate: event.target.value }))} className="h-10 rounded-xl border border-amber-500/50 bg-white px-3 dark:bg-white/5" />
+                    </div>
+                  )}
                   <input type="file" accept="image/*" multiple onChange={(event) => setEditImageFiles(Array.from(event.target.files ?? []))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5 md:col-span-2" />
                   {editForm.imageUrls.length > 0 ? <div className="md:col-span-2 flex flex-wrap gap-2">{editForm.imageUrls.map((imageUrl, index) => <div key={`${imageUrl}-${index}`} className="relative"><img src={resolveMediaUrl(imageUrl)} alt={`Room image ${index + 1}`} className="h-14 w-20 rounded-lg object-cover" /><button type="button" onClick={() => setEditForm((prev) => ({ ...prev, imageUrls: prev.imageUrls.filter((_, currentIndex) => currentIndex !== index) }))} className="absolute -right-1 -top-1 rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] text-white">x</button></div>)}</div> : null}
                   {editImageFiles.length > 0 ? <p className="md:col-span-2 text-xs text-slate-500 dark:text-slate-400">Đã chọn {editImageFiles.length} ảnh mới để thêm.</p> : null}
@@ -648,7 +667,19 @@ export function AdminRoomsPage() {
                   <div>
                     <p className="font-semibold">Room {room.roomNumber}</p>
                     <p className="muted-text">#{room.id} • {room.roomType ?? room.type} • Floor {room.floor ?? "-"} • {Number(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND</p>
-                    <p className="muted-text">Area: {room.area ?? "-"}m² • Capacity: {room.maxCapacity ?? "-"} • Status: {room.status ?? "-"}</p>
+                    <p className="muted-text">Area: {room.area ?? "-"}m² • Capacity: {room.maxCapacity ?? "-"} • Status: <span className={room.status === "Maintenance" ? "text-amber-500 font-medium" : ""}>{room.status ?? "-"}</span></p>
+                    {room.status === "Maintenance" && (
+                      <div className="mt-1 flex items-center gap-2">
+                        {room.maintenanceEndDate && <p className="text-xs text-amber-500">Dự kiến xong: {new Date(room.maintenanceEndDate).toLocaleDateString("vi-VN")}</p>}
+                        <Button 
+                          variant="ghost" 
+                          className="h-7 px-2 text-[10px] text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10"
+                          onClick={() => update.mutate({ id: room.id, payload: { ...room, status: "Available", maintenanceEndDate: null } })}
+                        >
+                          Hoàn thành (Mark Completed)
+                        </Button>
+                      </div>
+                    )}
                     <p className="muted-text">Amenities: {Array.isArray(room.amenities) ? room.amenities.join(", ") : "-"}</p>
                   </div>
                   <div className="flex gap-2">
@@ -665,7 +696,8 @@ export function AdminRoomsPage() {
                         status: room.status ?? "Available",
                         description: room.description ?? "",
                         imageUrls: roomImageUrls,
-                        amenities: Array.isArray(room.amenities) ? room.amenities.join(", ") : ""
+                        amenities: Array.isArray(room.amenities) ? room.amenities.join(", ") : "",
+                        maintenanceEndDate: room.maintenanceEndDate ? String(room.maintenanceEndDate).slice(0, 10) : ""
                       });
                       setEditImageFiles([]);
                     }}>Edit</Button>

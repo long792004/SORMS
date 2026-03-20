@@ -145,7 +145,7 @@ export function HomePage() {
               location={room.location ?? "SORM Residence"}
               imageUrl={getRoomImageUrls(room)[0]}
               status={room.status ?? "Available"}
-              holdExpiresAt={room.holdExpiresAt}
+              holdExpiresAt={room.maintenanceEndDate || room.holdExpiresAt}
               onView={() => navigate(`/rooms/${getRoomId(room)}`)}
               onBook={() => handleBookFromCard(room)}
             />
@@ -286,7 +286,7 @@ export function RoomListPage() {
               location={room.location ?? "SORM Residence"}
               imageUrl={getRoomImageUrls(room)[0]}
               status={room.status ?? "Available"}
-              holdExpiresAt={room.holdExpiresAt}
+              holdExpiresAt={room.maintenanceEndDate || room.holdExpiresAt}
               onView={() => navigate(`/rooms/${getRoomId(room)}`)}
               onBook={() => handleBookFromCard(room)}
             />
@@ -361,6 +361,11 @@ export function RoomDetailPage() {
         <div className="glass-card rounded-xl p-5">
           <h1 className="text-h2 font-heading">Room {room?.roomNumber ?? id}</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-300">{room?.description ?? "Premium room with full amenities."}</p>
+          {room?.status === "Maintenance" && room?.maintenanceEndDate && (
+            <p className="mt-2 rounded-lg bg-amber-500/10 p-3 text-sm font-medium text-amber-500 border border-amber-500/20">
+              Phòng đang bảo trì. Dự kiến sẽ trống vào ngày: {new Date(room.maintenanceEndDate).toLocaleDateString("vi-VN")}
+            </p>
+          )}
           <p className="mt-2 text-xl font-semibold text-primary">{Number(room?.price ?? room?.monthlyRent ?? 0).toLocaleString("vi-VN")} VND/month</p>
           <div className="mt-2"><RatingStars rating={Number(room?.averageRating ?? 0)} /></div>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Amenities: {(room?.amenities ?? ["WiFi", "Air Conditioner", "Smart Lock"]).join(", ")}</p>
