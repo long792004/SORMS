@@ -15,6 +15,13 @@
 
 Nếu máy bạn khác thông số trên, chỉnh lại `ConnectionStrings:DefaultConnection` trong `SORMS.API/appsettings.Development.json`.
 
+## 1.1) Bổ sung secrets local cần thiết (nếu test đầy đủ)
+- `PayOS` (`ClientId`, `ApiKey`, `ChecksumKey`, `WebhookUrl`)
+- `EmailConfig` (`From`, `Password`)
+- `AdminAccount` (`Email`, `Password`)
+
+> Các secret đã được bỏ khỏi repo để an toàn. Bạn cần tự điền vào `appsettings.Development.json` hoặc set bằng biến môi trường local.
+
 ## 2) Chạy nhanh toàn bộ hệ thống
 Tại thư mục gốc dự án, chạy:
 

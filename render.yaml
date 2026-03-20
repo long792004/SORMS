@@ -1,11 +1,12 @@
 services:
   - type: web
     name: sorms-api
-    env: docker
+    runtime: docker
     plan: free
     rootDir: .
     dockerContext: .
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
 
     envVars:
       - key: ASPNETCORE_ENVIRONMENT

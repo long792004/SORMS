@@ -182,7 +182,6 @@ builder.Services.AddEndpointsApiExplorer();
         });
     });
 
-    builder.Services.AddControllers();
     builder.Services.AddAuthorization();
 
     // Configure Forwarded Headers for Render
@@ -218,6 +217,7 @@ builder.Services.AddEndpointsApiExplorer();
 
     app.UseAuthentication();
     app.UseAuthorization();
+    app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "SORMS.API" }));
     app.MapControllers();
 
     // ========== 🔐 SEED ADMIN USER ON STARTUP ==========
