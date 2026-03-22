@@ -1,14 +1,23 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App'
-import { useThemeStore, updateDocumentTheme } from './store/themeStore'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { AppRoutes } from "./routes/AppRoutes";
+import { AppProviders } from "./app/providers";
+import { ThemeSync } from "./app/ThemeSync";
+import "./app/globals.css";
 
-// Apply theme on initial load
-updateDocumentTheme(useThemeStore.getState().theme);
+if (!localStorage.getItem("theme_mode")) {
+  localStorage.setItem("theme_mode", "dark");
+  document.documentElement.classList.add("dark");
+}
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <AppProviders>
+      <ThemeSync />
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppRoutes />
+      </BrowserRouter>
+    </AppProviders>
+  </React.StrictMode>
+);

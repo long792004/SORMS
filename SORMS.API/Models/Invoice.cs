@@ -25,6 +25,17 @@ namespace SORMS.API.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 
+        public int? VoucherId { get; set; }
+
+        [ForeignKey(nameof(VoucherId))]
+        public Voucher? Voucher { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DiscountAmount { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal TotalAmount { get; set; }
+
         [Required, MaxLength(255)]
         public string Description { get; set; }
 
@@ -40,6 +51,12 @@ namespace SORMS.API.Models
 
         [Required]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime? BookingCheckInDate { get; set; }
+
+        public DateTime? BookingCheckOutDate { get; set; }
+
+        public int? BookingNumberOfResidents { get; set; }
 
         public DateTime? PaidAt { get; set; }
     }

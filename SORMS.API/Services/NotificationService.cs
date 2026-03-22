@@ -74,9 +74,38 @@
         // Tạo notification Individual (cho 1 resident hoặc 1 staff cụ thể)
         public async Task<NotificationDto> CreateNotificationAsync(NotificationDto notificationDto)
         {
+            var message = notificationDto.Message?.Trim();
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                throw new ArgumentException("Nội dung thông báo không được để trống");
+            }
+
+            if (notificationDto.ResidentId.HasValue)
+            {
+                var residentExists = await _context.Residents.AnyAsync(r => r.Id == notificationDto.ResidentId.Value);
+                if (!residentExists)
+                {
+                    throw new InvalidOperationException($"Không tìm thấy resident với ID {notificationDto.ResidentId.Value}");
+                }
+            }
+
+            if (notificationDto.StaffId.HasValue)
+            {
+                var staffExists = await _context.Staffs.AnyAsync(s => s.Id == notificationDto.StaffId.Value);
+                if (!staffExists)
+                {
+                    throw new InvalidOperationException($"Không tìm thấy staff với ID {notificationDto.StaffId.Value}");
+                }
+            }
+
+            if (!notificationDto.ResidentId.HasValue && !notificationDto.StaffId.HasValue)
+            {
+                throw new ArgumentException("Phải chỉ định người nhận thông báo");
+            }
+
             var notification = new Notification
             {
-                Message = notificationDto.Message,
+                Message = message,
                 CreatedAt = DateTime.UtcNow,
                 IsRead = false,
                 Type = "Individual",
@@ -88,6 +117,7 @@
             await _context.SaveChangesAsync();
 
             notificationDto.Id = notification.Id;
+            notificationDto.Message = notification.Message;
             notificationDto.IsRead = false;
             notificationDto.CreatedAt = notification.CreatedAt;
             notificationDto.Type = "Individual";

@@ -10,10 +10,12 @@ namespace SORMS.API.Interfaces
         Task<List<InvoiceDetailDto>> GetResidentInvoicesAsync(int residentId);
         Task<List<InvoiceDetailDto>> GetAllInvoicesAsync(int pageNumber = 1, int pageSize = 10);
         Task<InvoiceDetailDto> CreateInvoiceAsync(InvoiceCreateDto invoiceDto, int createdByStaffId);
+        Task<InvoiceDetailDto> ApplyVoucherToInvoiceAsync(int invoiceId, string voucherCode, string currentUserId);
         Task<bool> DeleteInvoiceAsync(int invoiceId);
 
         // PayOS Payment
         Task<PaymentResponseDto> CreatePaymentLinkAsync(int invoiceId, string? returnUrl, string? cancelUrl);
+        Task<PaymentResponseDto> CreateRoomBookingPaymentLinkAsync(int roomId, int residentId, CreateRoomPaymentLinkDto dto);
         Task<PaymentStatusDto?> GetPaymentStatusAsync(int invoiceId);
         Task<bool> VerifyPaymentAsync(long orderCode);
         Task<bool> HandlePayOSWebhookAsync(PaymentWebhookDto webhookData);

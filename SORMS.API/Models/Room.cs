@@ -27,7 +27,9 @@ namespace SORMS.API.Models
         public int MaxCapacity { get; set; } = 1;
 
         [Required, MaxLength(20)]
-        public string Status { get; set; } = "Available"; // "Available", "Occupied", "Maintenance"
+        public string Status { get; set; } = "Available"; // "Available", "OnHold", "Occupied", "Maintenance"
+
+        public DateTime? HoldExpiresAt { get; set; }
 
         public DateTime? MaintenanceEndDate { get; set; }
 
@@ -37,10 +39,14 @@ namespace SORMS.API.Models
 
         public string? ImageUrl { get; set; }
 
+        [Column(TypeName = "text[]")]
+        public string[] Amenities { get; set; } = Array.Empty<string>();
+
         public bool IsActive { get; set; } = true;
 
         public ICollection<Resident> Residents { get; set; } = new List<Resident>();
         public ICollection<CheckInRecord> CheckInRecords { get; set; } = new List<CheckInRecord>();
         public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
+        public ICollection<Review> Reviews { get; set; } = new List<Review>();
     }
 }

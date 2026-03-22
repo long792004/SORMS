@@ -36,7 +36,13 @@ builder.Services.AddDbContext<SormsDbContext>(options =>
 
 // 3. Đăng ký các service
 builder.Services.AddHttpClient();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient<IChatbotService, ChatbotService>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
     builder.Services.AddScoped<IAuthService, AuthService>();
     builder.Services.AddScoped<IResidentService, ResidentService>();
@@ -47,6 +53,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
     builder.Services.AddScoped<IRoomService, RoomService>();
     builder.Services.AddScoped<IStaffService, StaffService>();
     builder.Services.AddScoped<IPaymentService, PaymentService>();
+    builder.Services.AddScoped<IVoucherService, VoucherService>();
+    builder.Services.AddScoped<IReviewService, ReviewService>();
+    builder.Services.AddHostedService<BookingManagementBackgroundService>();
 
     // PayOS Setup (Now properly configured in PaymentService)
     // var payOsClientId = builder.Configuration["PayOS:ClientId"] ?? "";
@@ -173,7 +182,6 @@ builder.Services.AddEndpointsApiExplorer();
         });
     });
 
-    builder.Services.AddControllers();
     builder.Services.AddAuthorization();
 
     // Configure Forwarded Headers for Render
@@ -209,6 +217,7 @@ builder.Services.AddEndpointsApiExplorer();
 
     app.UseAuthentication();
     app.UseAuthorization();
+    app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "SORMS.API" }));
     app.MapControllers();
 
     // ========== 🔐 SEED ADMIN USER ON STARTUP ==========
