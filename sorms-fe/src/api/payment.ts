@@ -66,5 +66,10 @@ export const paymentApi = {
   updateRoomPricing: async (roomId: number, data: UpdateRoomPricingRequest) => {
     const response = await client.put<ApiResponse<RoomPricingDto>>(`/Payment/room-pricing/${roomId}`, data);
     return response.data;
+  },
+
+  deleteRoomPricing: async (pricingId: number) => {
+    const response = await client.delete<ApiResponse<any>>(`/Payment/room-pricing/${pricingId}`);
+    return response.data;
   }
 };

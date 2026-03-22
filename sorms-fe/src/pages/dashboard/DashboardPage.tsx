@@ -24,7 +24,7 @@ import { checkInApi } from '../../api/checkin';
 import type { ResidentDto, RoomDto, ServiceRequestDto } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 
-const COLORS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#155e63', '#1f8b8f', '#0ea5a8', '#c56e16', '#15803d', '#b91c1c'];
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', {

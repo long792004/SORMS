@@ -229,6 +229,16 @@
 
             if (resident == null) return false;
 
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null)
+            {
+                var emailInUse = await _context.Users.AnyAsync(u => u.Email == email && u.Id != userId);
+                if (emailInUse)
+                    return false;
+
+                user.Email = email;
+            }
+
             resident.Email = email;
             resident.Phone = phone ?? "";
 
@@ -246,6 +256,25 @@
             resident.Address = address;
             resident.EmergencyContact = emergencyContact;
             resident.Notes = notes;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> VerifyIdentityAsync(int residentId, int verifiedByUserId, bool isVerified, string? identityDocumentUrl)
+        {
+            var resident = await _context.Residents.FirstOrDefaultAsync(r => r.Id == residentId && r.IsActive);
+            if (resident == null)
+                return false;
+
+            resident.IdentityVerified = isVerified;
+            resident.IdentityVerifiedAt = DateTime.UtcNow;
+            resident.IdentityVerifiedByUserId = verifiedByUserId;
+
+            if (!string.IsNullOrWhiteSpace(identityDocumentUrl))
+            {
+                resident.IdentityDocumentUrl = identityDocumentUrl.Trim();
+            }
 
             await _context.SaveChangesAsync();
             return true;

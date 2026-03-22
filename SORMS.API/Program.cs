@@ -47,6 +47,10 @@ builder.Services.AddScoped<IEmailService, EmailService>();
     builder.Services.AddScoped<IRoomService, RoomService>();
     builder.Services.AddScoped<IStaffService, StaffService>();
     builder.Services.AddScoped<IPaymentService, PaymentService>();
+    builder.Services.AddScoped<IReservationService, ReservationService>();
+    builder.Services.AddScoped<IRoomInspectionService, RoomInspectionService>();
+    builder.Services.AddScoped<IRatingService, RatingService>();
+    builder.Services.AddHostedService<ReservationExpiryBackgroundService>();
 
     // PayOS Setup (Now properly configured in PaymentService)
     // var payOsClientId = builder.Configuration["PayOS:ClientId"] ?? "";

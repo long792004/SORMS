@@ -1,20 +1,9 @@
 import { Outlet } from 'react-router-dom';
-import { useThemeStore } from '../store/themeStore';
-import { BadgeCheck, Clock3, Moon, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import { BadgeCheck, Clock3, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function AuthLayout() {
-  const { theme, toggleTheme } = useThemeStore();
-
   return (
     <div className="auth-bg relative flex min-h-screen items-center justify-center p-4 lg:p-6">
-      <button
-        onClick={toggleTheme}
-        className="btn btn-ghost btn-sm"
-        style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10 }}
-        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-      </button>
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div style={{
           position: 'absolute', width: 460, height: 460, borderRadius: '50%',

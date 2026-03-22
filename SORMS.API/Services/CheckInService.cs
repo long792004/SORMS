@@ -247,6 +247,9 @@ namespace SORMS.API.Services
 
             if (isApproved)
             {
+                if (!record.Resident.IdentityVerified)
+                    throw new Exception("Cư dân chưa hoàn tất xác minh CCCD. Không thể phê duyệt check-in.");
+
                 var invoice = await _context.Invoices
                     .Where(i => i.ResidentId == record.ResidentId && i.RoomId == record.RoomId)
                     .OrderByDescending(i => i.CreatedAt)
@@ -330,6 +333,12 @@ namespace SORMS.API.Services
 
             if (isApproved)
             {
+                var inspection = await _context.RoomInspections
+                    .FirstOrDefaultAsync(x => x.CheckInRecordId == record.Id);
+
+                if (inspection == null)
+                    throw new Exception("Chưa có biên bản kiểm tra phòng. Vui lòng kiểm tra phòng trước khi phê duyệt checkout.");
+
                 // Phê duyệt - cho phép check-out
                 record.Status = "CheckedOut";
                 record.CheckOutTime = DateTime.UtcNow;

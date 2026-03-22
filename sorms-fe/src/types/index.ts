@@ -79,6 +79,10 @@ export interface ResidentDto {
   gender?: string;
   dateOfBirth?: string;
   createdAt?: string;
+  identityDocumentUrl?: string;
+  identityVerified?: boolean;
+  identityVerifiedAt?: string;
+  identityVerifiedByUserId?: number;
 }
 
 export interface UpdateResidentProfileRequest {
@@ -90,6 +94,12 @@ export interface UpdateResidentProfileRequest {
 export interface UpdateResidentAccountRequest {
   email: string;
   phone: string;
+}
+
+export interface VerifyIdentityRequest {
+  residentId: number;
+  isVerified: boolean;
+  identityDocumentUrl?: string;
 }
 
 // ===== Room =====
@@ -337,4 +347,96 @@ export interface UpdateRoomPricingRequest {
   internetFee: number;
   maintenanceFee: number;
   notes?: string;
+}
+
+// ===== Reservation =====
+export interface ReservationGuestDto {
+  id: number;
+  fullName: string;
+  identityNumber: string;
+  phone: string;
+  isPrimaryGuest: boolean;
+}
+
+export interface ReservationDto {
+  id: number;
+  residentId: number;
+  residentName: string;
+  roomId: number;
+  roomNumber: string;
+  checkInDate: string;
+  checkOutDate: string;
+  numberOfGuests: number;
+  status: string;
+  holdExpiresAt: string;
+  createdAt: string;
+  confirmedAt?: string;
+  cancelReason?: string;
+  invoiceId?: number;
+  guests: ReservationGuestDto[];
+}
+
+export interface CreateReservationGuestRequest {
+  fullName: string;
+  identityNumber: string;
+  phone: string;
+}
+
+export interface CreateReservationRequest {
+  roomId: number;
+  checkInDate: string;
+  checkOutDate: string;
+  numberOfGuests: number;
+  guests: CreateReservationGuestRequest[];
+}
+
+export interface ConfirmReservationPaymentRequest {
+  orderCode: number;
+}
+
+export interface CancelReservationRequest {
+  reason?: string;
+}
+
+// ===== Room Inspection =====
+export interface RoomInspectionDto {
+  id: number;
+  checkInRecordId: number;
+  inspectedByUserId: number;
+  inspectedAt: string;
+  furnitureStatus: string;
+  equipmentStatus: string;
+  roomConditionStatus: string;
+  result: string;
+  additionalFee: number;
+  notes?: string;
+}
+
+export interface CreateRoomInspectionRequest {
+  checkInRecordId: number;
+  furnitureStatus: string;
+  equipmentStatus: string;
+  roomConditionStatus: string;
+  result: string;
+  additionalFee: number;
+  notes?: string;
+}
+
+// ===== Rating =====
+export interface RatingDto {
+  id: number;
+  residentId: number;
+  roomId?: number;
+  checkInRecordId: number;
+  roomScore: number;
+  serviceScore: number;
+  comment?: string;
+  createdAt: string;
+}
+
+export interface CreateRatingRequest {
+  checkInRecordId: number;
+  roomScore: number;
+  serviceScore: number;
+  comment?: string;
 }

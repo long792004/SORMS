@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SORMS.API.Data;
@@ -11,9 +12,11 @@ using SORMS.API.Data;
 namespace SORMS.API.Migrations
 {
     [DbContext(typeof(SormsDbContext))]
-    partial class SormsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260322145039_AddReservationInspectionRatingAndIdentity")]
+    partial class AddReservationInspectionRatingAndIdentity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

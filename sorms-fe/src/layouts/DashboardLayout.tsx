@@ -1,11 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { useThemeStore } from '../store/themeStore';
 import {
   LayoutDashboard, Users, DoorOpen, LogIn, FileText, Bell, BarChart3,
   UserCog, ChevronDown, ChevronRight, LogOut, Menu, Settings, User,
-  Moon, Sun, Building2, ShieldCheck, X,
+  Building2, ShieldCheck, X,
 } from 'lucide-react';
 
 interface NavItem {
@@ -48,7 +47,7 @@ const navItems: NavItem[] = [
     icon: <DoorOpen size={20} />,
     children: [
       { label: 'All rooms', path: '/rooms', roles: ['Admin', 'Staff'] },
-      { label: 'Available rooms', path: '/rooms/available' },
+      { label: 'Available rooms', path: '/rooms/available', roles: ['Admin', 'Staff', 'Resident'] },
       { label: 'Create room', path: '/rooms/create', roles: ['Admin', 'Staff'] },
     ],
   },
@@ -62,6 +61,23 @@ const navItems: NavItem[] = [
       { label: 'Pending check-ins', path: '/checkin/pending', roles: ['Admin', 'Staff'] },
       { label: 'Pending check-outs', path: '/checkout/pending', roles: ['Admin', 'Staff'] },
       { label: 'All records', path: '/checkin/records', roles: ['Admin', 'Staff'] },
+      { label: 'Room inspection', path: '/checkout/inspection', roles: ['Admin', 'Staff'] },
+    ],
+  },
+  {
+    label: 'Reservations',
+    icon: <DoorOpen size={20} />,
+    children: [
+      { label: 'My reservations', path: '/reservations/my', roles: ['Resident'] },
+      { label: 'All reservations', path: '/reservations', roles: ['Admin', 'Staff'] },
+    ],
+  },
+  {
+    label: 'Ratings',
+    icon: <BarChart3 size={20} />,
+    children: [
+      { label: 'My ratings', path: '/ratings/my', roles: ['Resident'] },
+      { label: 'All ratings', path: '/ratings', roles: ['Admin', 'Staff'] },
     ],
   },
   {
@@ -111,7 +127,6 @@ const navItems: NavItem[] = [
 
 export default function DashboardLayout() {
   const { user, logout } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -362,13 +377,6 @@ export default function DashboardLayout() {
             <div className="btn btn-secondary btn-sm" style={{ cursor: 'default' }}>
               <span>{roleLabel}</span>
             </div>
-            <button
-              onClick={toggleTheme}
-              className="btn btn-ghost btn-sm"
-              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
             <NavLink to="/settings/change-password" className="btn btn-ghost btn-sm">
               <Settings size={18} />
             </NavLink>

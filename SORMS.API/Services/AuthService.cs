@@ -72,7 +72,7 @@ namespace SORMS.API.Services
         public async Task<string> RegisterAsync(RegisterDto registerDto)
         {
             var existingUser = await _context.Users
-                .AnyAsync(u => u.UserName == registerDto.FullName || u.Email == registerDto.Email);
+                .AnyAsync(u => u.UserName == registerDto.UserName || u.Email == registerDto.Email);
 
             if (existingUser)
                 return null;
@@ -273,6 +273,10 @@ namespace SORMS.API.Services
                 if (user.RoleId == 2)
                 {
                     var staff = _context.Staffs.FirstOrDefault(s => s.Email == user.Email);
+                    if (staff == null)
+                    {
+                        staff = _context.Staffs.FirstOrDefault(s => s.FullName == user.UserName);
+                    }
                     if (staff != null)
                     {
                         claims.Add(new Claim("StaffId", staff.Id.ToString()));
@@ -369,6 +373,8 @@ namespace SORMS.API.Services
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return false;
 
+            var oldEmail = user.Email;
+
             // Check if email is already taken by another user
             var existingUser = await _context.Users
                 .AnyAsync(u => u.Email == newEmail && u.Id != userId);
@@ -377,6 +383,22 @@ namespace SORMS.API.Services
                 return false;
 
             user.Email = newEmail;
+
+            // Keep profile tables consistent with Users.Email.
+            var resident = await _context.Residents.FirstOrDefaultAsync(r => r.UserId == userId);
+            if (resident != null)
+            {
+                resident.Email = newEmail;
+            }
+
+            var staff = !string.IsNullOrWhiteSpace(oldEmail)
+                ? await _context.Staffs.FirstOrDefaultAsync(s => s.Email == oldEmail)
+                : null;
+            if (staff != null)
+            {
+                staff.Email = newEmail;
+            }
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation($"Email updated successfully for user ID: {userId}");

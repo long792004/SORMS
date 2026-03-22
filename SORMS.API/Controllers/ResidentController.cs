@@ -238,5 +238,32 @@ namespace SORMS.API.Controllers
 
             return Ok("Cập nhật hồ sơ thành công");
         }
+
+        /// <summary>
+        /// Verify identity document for resident - Staff/Admin only
+        /// </summary>
+        [HttpPost("verify-identity")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> VerifyIdentity([FromBody] VerifyIdentityDto dto)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int verifierId))
+                return Unauthorized("Không xác định được người duyệt.");
+
+            var success = await _residentService.VerifyIdentityAsync(
+                dto.ResidentId,
+                verifierId,
+                dto.IsVerified,
+                dto.IdentityDocumentUrl);
+
+            if (!success)
+                return NotFound(new { success = false, message = "Không tìm thấy cư dân để xác minh." });
+
+            return Ok(new
+            {
+                success = true,
+                message = dto.IsVerified ? "Đã xác minh CCCD thành công." : "Đã cập nhật trạng thái chưa xác minh CCCD."
+            });
+        }
     }
 }

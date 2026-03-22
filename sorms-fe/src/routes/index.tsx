@@ -42,6 +42,9 @@ const AdminPaymentPage = lazy(() => import('../pages/invoices/AdminPaymentPage')
 const RoomPricingPage = lazy(() => import('../pages/rooms/RoomPricingPage'));
 const PaymentSuccessPage = lazy(() => import('../pages/invoices/PaymentSuccessPage'));
 const PaymentFailurePage = lazy(() => import('../pages/invoices/PaymentFailurePage'));
+const ReservationPage = lazy(() => import('../pages/reservations/ReservationPage'));
+const RoomInspectionPage = lazy(() => import('../pages/checkin/RoomInspectionPage'));
+const RatingPage = lazy(() => import('../pages/ratings/RatingPage'));
 
 function RouteFallback() {
   return <LoadingSpinner text="Loading page..." />;
@@ -94,8 +97,8 @@ export default function AppRouter() {
           <Route path="/invoices" element={<RoleRoute roles={['Admin','Staff']}><AdminPaymentPage /></RoleRoute>} />
 
           {/* Rooms */}
-          <Route path="/rooms" element={<RoomListPage />} />
-          <Route path="/rooms/available" element={<RoomListPage availableOnly />} />
+          <Route path="/rooms" element={<RoleRoute roles={['Admin','Staff','Resident']}><RoomListPage /></RoleRoute>} />
+          <Route path="/rooms/available" element={<RoleRoute roles={['Admin','Staff','Resident']}><RoomListPage availableOnly /></RoleRoute>} />
           <Route path="/rooms/create" element={<RoleRoute roles={['Admin','Staff']}><RoomFormPage /></RoleRoute>} />
           <Route path="/rooms/:id" element={<RoomDetailPage />} />
           <Route path="/rooms/:id/edit" element={<RoleRoute roles={['Admin','Staff']}><RoomFormPage /></RoleRoute>} />
@@ -108,6 +111,15 @@ export default function AppRouter() {
           <Route path="/checkin/pending" element={<RoleRoute roles={['Admin','Staff']}><PendingCheckInPage type="checkin" /></RoleRoute>} />
           <Route path="/checkout/pending" element={<RoleRoute roles={['Admin','Staff']}><PendingCheckInPage type="checkout" /></RoleRoute>} />
           <Route path="/checkin/records" element={<RoleRoute roles={['Admin','Staff']}><CheckInRecordsPage /></RoleRoute>} />
+          <Route path="/checkout/inspection" element={<RoleRoute roles={['Admin','Staff']}><RoomInspectionPage /></RoleRoute>} />
+
+          {/* Reservations */}
+          <Route path="/reservations/my" element={<RoleRoute roles={['Resident']}><ReservationPage /></RoleRoute>} />
+          <Route path="/reservations" element={<RoleRoute roles={['Admin','Staff']}><ReservationPage adminView /></RoleRoute>} />
+
+          {/* Ratings */}
+          <Route path="/ratings/my" element={<RoleRoute roles={['Resident']}><RatingPage /></RoleRoute>} />
+          <Route path="/ratings" element={<RoleRoute roles={['Admin','Staff']}><RatingPage adminView /></RoleRoute>} />
 
           {/* Service Requests */}
           <Route path="/service-requests/create" element={<RoleRoute roles={['Resident']}><CreateServiceRequestPage /></RoleRoute>} />

@@ -23,6 +23,10 @@ namespace SORMS.API.Data
         public DbSet<CheckInRecord> CheckInRecords { get; set; }
         public DbSet<Report> Reports { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<Reservation> Reservations { get; set; }
+        public DbSet<ReservationGuest> ReservationGuests { get; set; }
+        public DbSet<RoomInspection> RoomInspections { get; set; }
+        public DbSet<Rating> Ratings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -90,6 +94,54 @@ namespace SORMS.API.Data
                 .WithMany(rm => rm.CheckInRecords)
                 .HasForeignKey(c => c.RoomId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Reservation>()
+                .HasOne(r => r.Resident)
+                .WithMany(x => x.Reservations)
+                .HasForeignKey(r => r.ResidentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Reservation>()
+                .HasOne(r => r.Room)
+                .WithMany()
+                .HasForeignKey(r => r.RoomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Reservation>()
+                .HasOne(r => r.Invoice)
+                .WithMany()
+                .HasForeignKey(r => r.InvoiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<ReservationGuest>()
+                .HasOne(g => g.Reservation)
+                .WithMany(r => r.Guests)
+                .HasForeignKey(g => g.ReservationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RoomInspection>()
+                .HasOne(i => i.CheckInRecord)
+                .WithMany()
+                .HasForeignKey(i => i.CheckInRecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Rating>()
+                .HasOne(r => r.Resident)
+                .WithMany(x => x.Ratings)
+                .HasForeignKey(r => r.ResidentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Rating>()
+                .HasOne(r => r.CheckInRecord)
+                .WithMany()
+                .HasForeignKey(r => r.CheckInRecordId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Rating>()
+                .HasOne(r => r.Room)
+                .WithMany()
+                .HasForeignKey(r => r.RoomId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<Room>()
                 .Property(r => r.MaxCapacity)

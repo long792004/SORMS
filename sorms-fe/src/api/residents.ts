@@ -1,5 +1,5 @@
 import client from './client';
-import type { ResidentDto, UpdateResidentProfileRequest, UpdateResidentAccountRequest } from '../types';
+import type { ResidentDto, UpdateResidentProfileRequest, UpdateResidentAccountRequest, VerifyIdentityRequest } from '../types';
 
 export const residentApi = {
   getAll: () =>
@@ -28,4 +28,7 @@ export const residentApi = {
 
   updateAccount: (data: UpdateResidentAccountRequest) =>
     client.put('/Resident/update-account', data),
+
+  verifyIdentity: (data: VerifyIdentityRequest) =>
+    client.post('/Resident/verify-identity', data),
 };

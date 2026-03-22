@@ -328,5 +328,27 @@ namespace SORMS.API.Controllers
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
+
+        /// <summary>
+        /// Deactivate room pricing (Admin/Staff only)
+        /// </summary>
+        [Authorize(Roles = "Admin,Staff")]
+        [HttpDelete("room-pricing/{pricingId}")]
+        public async Task<IActionResult> DeleteRoomPricing(int pricingId)
+        {
+            try
+            {
+                var success = await _paymentService.DeactivatePricingAsync(pricingId);
+                if (!success)
+                    return NotFound(new { success = false, message = "Room pricing not found" });
+
+                return Ok(new { success = true, message = "Room pricing deactivated successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error deleting room pricing: {ex.Message}");
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
     }
 }

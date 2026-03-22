@@ -29,6 +29,15 @@ namespace SORMS.API.Models
         [Required, MaxLength(20)]
         public string IdentityNumber { get; set; }
 
+        [MaxLength(1000)]
+        public string? IdentityDocumentUrl { get; set; }
+
+        public bool IdentityVerified { get; set; } = false;
+
+        public DateTime? IdentityVerifiedAt { get; set; }
+
+        public int? IdentityVerifiedByUserId { get; set; }
+
         // Role của resident: Lecturer, Staff, Guest (không phải User Role)
         [MaxLength(20)]
         public string? Role { get; set; }
@@ -61,5 +70,7 @@ namespace SORMS.API.Models
         public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
         public ICollection<CheckInRecord> CheckInRecords { get; set; } = new List<CheckInRecord>();
         public ICollection<Invoice> Invoices { get; set; } = new List<Invoice>();
+        public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
+        public ICollection<Rating> Ratings { get; set; } = new List<Rating>();
     }
 }

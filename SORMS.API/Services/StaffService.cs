@@ -47,9 +47,29 @@ namespace SORMS.API.Services
             var staff = await _context.Staffs.FindAsync(id);
             if (staff == null) return false;
 
+            var oldEmail = staff.Email;
+
+            if (!string.Equals(oldEmail, staffDto.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                var emailInUse = await _context.Users
+                    .AnyAsync(u => u.Email == staffDto.Email && u.Email != oldEmail);
+                if (emailInUse)
+                    return false;
+            }
+
             staff.FullName = staffDto.FullName;
             staff.Email = staffDto.Email;
             staff.Phone = staffDto.Phone;
+
+            // Keep related Staff user account consistent with profile email.
+            if (!string.IsNullOrWhiteSpace(oldEmail))
+            {
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == oldEmail && u.RoleId == 2);
+                if (user != null)
+                {
+                    user.Email = staffDto.Email;
+                }
+            }
 
             _context.Staffs.Update(staff);
             await _context.SaveChangesAsync();

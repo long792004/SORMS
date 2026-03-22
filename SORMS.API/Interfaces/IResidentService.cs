@@ -15,4 +15,5 @@ public interface IResidentService
     Task<bool> UpdateResidentAccountAsync(int userId, string email, string phone);
     Task<bool> UpdateResidentProfileAsync(int userId, string? address, string? emergencyContact, string? notes);
     Task<ResidentDto> GetResidentByUserIdAsync(int userId);
+    Task<bool> VerifyIdentityAsync(int residentId, int verifiedByUserId, bool isVerified, string? identityDocumentUrl);
 }

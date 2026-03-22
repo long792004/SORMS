@@ -173,28 +173,41 @@ namespace SORMS.API.Services
 
         public async Task<ReportDto> GenerateRevenueReportAsync()
         {
-            //var totalRevenue = await _context.Billings
-            //    .Where(b => b.IsPaid)
-            //    .SumAsync(b => b.Amount);
+            var paidRevenue = await _context.Invoices
+                .Where(i => i.Status == "Paid")
+                .SumAsync(i => (decimal?)i.Amount) ?? 0m;
 
-            //var pendingRevenue = await _context.Billings
-            //    .Where(b => !b.IsPaid)
-            //    .SumAsync(b => b.Amount);
+            var pendingRevenue = await _context.Invoices
+                .Where(i => i.Status == "Pending" || i.Status == "Created" || i.Status == "Processing")
+                .SumAsync(i => (decimal?)i.Amount) ?? 0m;
 
-            //var report = new Report
-            //{
-            //    Title = "Báo cáo doanh thu",
-            //    GeneratedDate = DateTime.UtcNow,
-            //    CreatedBy = "System",
-            //    Content = $"Tổng doanh thu đã thu: {totalRevenue:N0} VND\nDoanh thu chờ thanh toán: {pendingRevenue:N0} VND\nTổng cộng: {(totalRevenue + pendingRevenue):N0} VND",
-            //    Status = "Reviewed",
-            //    LastUpdated = DateTime.UtcNow
-            //};
+            var cancelledRevenue = await _context.Invoices
+                .Where(i => i.Status == "Cancelled")
+                .SumAsync(i => (decimal?)i.Amount) ?? 0m;
 
-            //_context.Reports.Add(report);
-            //await _context.SaveChangesAsync();
+            var totalInvoices = await _context.Invoices.CountAsync();
+            var paidInvoices = await _context.Invoices.CountAsync(i => i.Status == "Paid");
 
-            return null;
+            var report = new Report
+            {
+                Title = "Báo cáo doanh thu",
+                GeneratedDate = DateTime.UtcNow,
+                CreatedBy = "System",
+                Content =
+                    $"Tổng hóa đơn: {totalInvoices}\n" +
+                    $"Hóa đơn đã thanh toán: {paidInvoices}\n" +
+                    $"Tổng doanh thu đã thu: {paidRevenue:N0} VND\n" +
+                    $"Doanh thu chờ thanh toán: {pendingRevenue:N0} VND\n" +
+                    $"Doanh thu đã hủy: {cancelledRevenue:N0} VND\n" +
+                    $"Tổng giá trị hóa đơn (đã thu + chờ thu): {(paidRevenue + pendingRevenue):N0} VND",
+                Status = "Reviewed",
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _context.Reports.Add(report);
+            await _context.SaveChangesAsync();
+
+            return MapToDto(report);
         }
 
         // ==================== HELPER ====================

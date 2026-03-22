@@ -131,8 +131,12 @@ export default function RoomPricingPage() {
   const handleDelete = async () => {
     if (!deletePricingId) return;
     try {
-      // Note: Delete endpoint may need to be added to backend
-      setPricings(pricings.filter(p => p.id !== deletePricingId));
+      const res = await paymentApi.deleteRoomPricing(deletePricingId);
+      if (!res.success) {
+        throw new Error(res.message || 'Failed to delete pricing');
+      }
+
+      await fetchPricings();
       setNotice({ open: true, title: 'Pricing Deleted', message: 'Pricing deleted successfully.', variant: 'success' });
     } catch (err: unknown) {
       setNotice({
