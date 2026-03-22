@@ -1,0 +1,1 @@
+import{c as o}from"./client-BWeh6IJH.js";const l={getAll:()=>o.get("/Room"),getById:e=>o.get(`/Room/${e}`),create:e=>o.post("/Room",e),update:(e,t)=>o.put(`/Room/${e}`,t),delete:e=>o.delete(`/Room/${e}`),getAvailable:e=>o.get("/Room/available",{params:e})};export{l as r};
