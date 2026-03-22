@@ -19,13 +19,13 @@
             var residents = await _context.Residents
                 .Include(r => r.Room)
                 .Include(r => r.User)
-                .Where(r => r.IsActive)
                 .ToListAsync();
 
             return residents.Select(r => new ResidentDto
             {
                 Id = r.Id,
                 UserId = r.UserId,
+                UserName = r.User?.UserName,
                 FullName = r.FullName,
                 Email = r.Email,
                 Phone = r.Phone,
@@ -38,7 +38,9 @@
                 Address = r.Address,
                 EmergencyContact = r.EmergencyContact,
                 Notes = r.Notes,
-                IsActive = r.IsActive
+                IsActive = r.IsActive,
+                Gender = r.Gender,
+                DateOfBirth = r.DateOfBirth
             });
         }
 
@@ -55,6 +57,7 @@
             {
                 Id = resident.Id,
                 UserId = resident.UserId,
+                UserName = resident.User?.UserName,
                 FullName = resident.FullName,
                 Email = resident.Email,
                 Phone = resident.Phone,
@@ -67,18 +70,48 @@
                 Address = resident.Address,
                 EmergencyContact = resident.EmergencyContact,
                 Notes = resident.Notes,
-                IsActive = resident.IsActive
+                IsActive = resident.IsActive,
+                Gender = resident.Gender,
+                DateOfBirth = resident.DateOfBirth
             };
         }
 
         public async Task<ResidentDto> CreateResidentAsync(ResidentDto residentDto)
         {
+            User? createdUser = null;
+
+            if (!string.IsNullOrWhiteSpace(residentDto.Password))
+            {
+                var requestedUserName = string.IsNullOrWhiteSpace(residentDto.UserName)
+                    ? residentDto.Email
+                    : residentDto.UserName;
+
+                if (string.IsNullOrWhiteSpace(requestedUserName))
+                    throw new InvalidOperationException("Username is required when creating resident account.");
+
+                var hasDuplicateUser = await _context.Users.AnyAsync(u => u.UserName == requestedUserName || u.Email == residentDto.Email);
+                if (hasDuplicateUser)
+                    throw new InvalidOperationException("Username or email already exists.");
+
+                createdUser = new User
+                {
+                    UserName = requestedUserName,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(residentDto.Password),
+                    RoleId = 3,
+                    IsActive = true,
+                    Email = residentDto.Email
+                };
+
+                _context.Users.Add(createdUser);
+                await _context.SaveChangesAsync();
+            }
+
             var resident = new Resident
             {
-                UserId = residentDto.UserId,
+                UserId = createdUser?.Id ?? residentDto.UserId,
                 FullName = residentDto.FullName,
                 Email = residentDto.Email,
-                Phone = residentDto.Phone,
+                Phone = string.IsNullOrWhiteSpace(residentDto.Phone) ? residentDto.PhoneNumber : residentDto.Phone,
                 IdentityNumber = residentDto.IdentityNumber,
                 Role = residentDto.Role,
                 RoomId = residentDto.RoomId,
@@ -87,7 +120,9 @@
                 Address = residentDto.Address,
                 EmergencyContact = residentDto.EmergencyContact,
                 Notes = residentDto.Notes,
-                IsActive = residentDto.IsActive.HasValue ? residentDto.IsActive.Value : true
+                IsActive = residentDto.IsActive.HasValue ? residentDto.IsActive.Value : true,
+                Gender = residentDto.Gender,
+                DateOfBirth = residentDto.DateOfBirth
             };
 
             _context.Residents.Add(resident);
@@ -105,7 +140,7 @@
             resident.UserId = residentDto.UserId;
             resident.FullName = residentDto.FullName;
             resident.Email = residentDto.Email;
-            resident.Phone = residentDto.Phone;
+            resident.Phone = string.IsNullOrWhiteSpace(residentDto.Phone) ? residentDto.PhoneNumber : residentDto.Phone;
             resident.IdentityNumber = residentDto.IdentityNumber;
             resident.Role = residentDto.Role;
             resident.RoomId = residentDto.RoomId;
@@ -117,9 +152,26 @@
             resident.Address = residentDto.Address;
             resident.EmergencyContact = residentDto.EmergencyContact;
             resident.Notes = residentDto.Notes;
+            resident.Gender = residentDto.Gender;
+            resident.DateOfBirth = residentDto.DateOfBirth;
             
             if (residentDto.IsActive.HasValue)
                 resident.IsActive = residentDto.IsActive.Value;
+
+            if (resident.UserId.HasValue)
+            {
+                var linkedUser = await _context.Users.FindAsync(resident.UserId.Value);
+                if (linkedUser != null)
+                {
+                    linkedUser.Email = residentDto.Email;
+
+                    if (!string.IsNullOrWhiteSpace(residentDto.UserName))
+                        linkedUser.UserName = residentDto.UserName;
+
+                    if (!string.IsNullOrWhiteSpace(residentDto.Password))
+                        linkedUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(residentDto.Password);
+                }
+            }
 
             await _context.SaveChangesAsync();
             return true;
@@ -127,26 +179,85 @@
 
         public async Task<bool> DeleteResidentAsync(int id)
         {
-            var resident = await _context.Residents.FindAsync(id);
+            var resident = await _context.Residents
+                .Include(r => r.User)
+                .FirstOrDefaultAsync(r => r.Id == id);
+
             if (resident == null) return false;
 
-            // Find and delete the corresponding User account with the same email
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == resident.Email);
-            if (user != null)
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
             {
-                _context.Users.Remove(user);
+                var residentCheckInIds = await _context.CheckInRecords
+                    .Where(record => record.ResidentId == id)
+                    .Select(record => record.Id)
+                    .ToListAsync();
+
+                var reviews = await _context.Reviews
+                    .Where(review => review.ResidentId == id || residentCheckInIds.Contains(review.CheckInId))
+                    .ToListAsync();
+                if (reviews.Count > 0)
+                {
+                    _context.Reviews.RemoveRange(reviews);
+                }
+
+                var checkInRecords = await _context.CheckInRecords
+                    .Where(record => record.ResidentId == id)
+                    .ToListAsync();
+                if (checkInRecords.Count > 0)
+                {
+                    _context.CheckInRecords.RemoveRange(checkInRecords);
+                }
+
+                var invoices = await _context.Invoices
+                    .Where(invoice => invoice.ResidentId == id)
+                    .ToListAsync();
+                if (invoices.Count > 0)
+                {
+                    _context.Invoices.RemoveRange(invoices);
+                }
+
+                var serviceRequests = await _context.ServiceRequests
+                    .Where(request => request.ResidentId == id)
+                    .ToListAsync();
+                if (serviceRequests.Count > 0)
+                {
+                    _context.ServiceRequests.RemoveRange(serviceRequests);
+                }
+
+                var notifications = await _context.Notifications
+                    .Where(notification => notification.ResidentId == id)
+                    .ToListAsync();
+                if (notifications.Count > 0)
+                {
+                    _context.Notifications.RemoveRange(notifications);
+                }
+
+                _context.Residents.Remove(resident);
+
+                if (resident.User != null)
+                {
+                    _context.Users.Remove(resident.User);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return true;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
             }
 
-            // Delete the resident record
-            _context.Residents.Remove(resident);
-            await _context.SaveChangesAsync();
-            return true;
         }
 
         public async Task<IEnumerable<ResidentDto>> GetResidentsByRoomIdAsync(int roomId)
         {
             var residents = await _context.Residents
-                .Where(r => r.RoomId == roomId && r.IsActive)
+                .Where(r => r.RoomId == roomId)
                 .ToListAsync();
 
             return residents.Select(r => new ResidentDto
@@ -165,7 +276,9 @@
                 Address = r.Address,
                 EmergencyContact = r.EmergencyContact,
                 Notes = r.Notes,
-                IsActive = r.IsActive
+                IsActive = r.IsActive,
+                Gender = r.Gender,
+                DateOfBirth = r.DateOfBirth
             });
         }
 
@@ -198,7 +311,7 @@
             var resident = await _context.Residents
                 .Include(r => r.Room)
                 .Include(r => r.User)
-                .FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+                .FirstOrDefaultAsync(r => r.UserId == userId);
 
             if (resident == null) return null;
 
@@ -206,6 +319,7 @@
             {
                 Id = resident.Id,
                 UserId = resident.UserId,
+                UserName = resident.User?.UserName,
                 FullName = resident.FullName,
                 Email = resident.Email,
                 Phone = resident.Phone,
@@ -218,14 +332,16 @@
                 Address = resident.Address,
                 EmergencyContact = resident.EmergencyContact,
                 Notes = resident.Notes,
-                IsActive = resident.IsActive
+                IsActive = resident.IsActive,
+                Gender = resident.Gender,
+                DateOfBirth = resident.DateOfBirth
             };
         }
 
         public async Task<bool> UpdateResidentAccountAsync(int userId, string email, string phone)
         {
             var resident = await _context.Residents
-                .FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+                .FirstOrDefaultAsync(r => r.UserId == userId);
 
             if (resident == null) return false;
 
@@ -249,7 +365,7 @@
         public async Task<bool> UpdateResidentProfileAsync(int userId, string? address, string? emergencyContact, string? notes)
         {
             var resident = await _context.Residents
-                .FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+                .FirstOrDefaultAsync(r => r.UserId == userId);
 
             if (resident == null) return false;
 

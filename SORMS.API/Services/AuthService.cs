@@ -71,54 +71,100 @@ namespace SORMS.API.Services
 
         public async Task<string> RegisterAsync(RegisterDto registerDto)
         {
+            var normalizedEmail = registerDto.Email?.Trim();
+            var normalizedUserName = registerDto.UserName?.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedEmail) || string.IsNullOrWhiteSpace(normalizedUserName))
+            {
+                return null;
+            }
+
             var existingUser = await _context.Users
-                .AnyAsync(u => u.UserName == registerDto.UserName || u.Email == registerDto.Email);
+                .AnyAsync(u => u.UserName == normalizedUserName || u.Email == normalizedEmail);
 
             if (existingUser)
                 return null;
 
-            // Tạo User account
-            var user = new User
-            {
-                UserName = registerDto.UserName,
-                PasswordHash = HashPassword(registerDto.Password),
-                RoleId = registerDto.RoleId,
-                IsActive = true,
-                Email = registerDto.Email
-            };
+            await using var transaction = await _context.Database.BeginTransactionAsync();
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync(); // Save để lấy user.Id
-
-            // ✅ TỰ ĐỘNG TẠO RESIDENT PROFILE nếu role = 3 (Resident)
-            if (user.RoleId == 3)
+            try
             {
-                var resident = new Resident
+                // Tạo User account
+                var user = new User
                 {
-                    UserId = user.Id,
-                    FullName = registerDto.FullName ?? user.UserName, // Nếu có FullName thì dùng, không thì dùng Username
-                    Email = user.Email,
-                    Phone = registerDto.Phone ?? "",
-                    IdentityNumber = registerDto.IdentityNumber ?? "",
-                    Role = null, // Sẽ được cập nhật sau (Lecturer/Staff/Guest)
-                    RoomId = null, // Chưa có phòng
-                    CheckInDate = DateTime.UtcNow,
-                    CheckOutDate = null,
-                    Address = registerDto.Address,
-                    EmergencyContact = registerDto.EmergencyContact,
-                    Notes = "Auto-created during user registration",
-                    IsActive = true
+                    UserName = normalizedUserName,
+                    PasswordHash = HashPassword(registerDto.Password),
+                    RoleId = registerDto.RoleId,
+                    IsActive = true,
+                    Email = normalizedEmail
                 };
 
-                _context.Residents.Add(resident);
-                await _context.SaveChangesAsync();
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync(); // Save để lấy user.Id
 
-                _logger.LogInformation($"Auto-created Resident profile for user: {user.UserName} (ID: {user.Id})");
+                // ✅ TỰ ĐỘNG TẠO RESIDENT PROFILE nếu role = 3 (Resident)
+                if (user.RoleId == 3)
+                {
+                    var resident = new Resident
+                    {
+                        UserId = user.Id,
+                        FullName = string.IsNullOrWhiteSpace(registerDto.FullName) ? user.UserName : registerDto.FullName.Trim(),
+                        Email = user.Email,
+                        Phone = registerDto.Phone?.Trim() ?? "",
+                        IdentityNumber = registerDto.IdentityNumber?.Trim() ?? "",
+                        Gender = string.IsNullOrWhiteSpace(registerDto.Gender) ? null : registerDto.Gender.Trim(),
+                        DateOfBirth = NormalizeUtcDate(registerDto.DateOfBirth),
+                        Role = null, // Sẽ được cập nhật sau (Lecturer/Staff/Guest)
+                        RoomId = null, // Chưa có phòng
+                        CheckInDate = DateTime.UtcNow,
+                        CheckOutDate = null,
+                        Address = string.IsNullOrWhiteSpace(registerDto.Address) ? null : registerDto.Address.Trim(),
+                        EmergencyContact = string.IsNullOrWhiteSpace(registerDto.EmergencyContact) ? null : registerDto.EmergencyContact.Trim(),
+                        Notes = "Auto-created during user registration",
+                        IsActive = true
+                    };
+
+                    _context.Residents.Add(resident);
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation($"Auto-created Resident profile for user: {user.UserName} (ID: {user.Id})");
+                }
+
+                await transaction.CommitAsync();
+
+                // Tự động tạo token sau khi đăng ký thành công
+                var token = GenerateJwtToken(user);
+                return token;
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await transaction.RollbackAsync();
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogWarning(rollbackEx, "Rollback failed while registering user with email {Email}", normalizedEmail);
+                }
+
+                _logger.LogError(ex, "Error while registering user with email {Email}", normalizedEmail);
+                throw;
+            }
+        }
+
+        private static DateTime? NormalizeUtcDate(DateTime? dateTime)
+        {
+            if (!dateTime.HasValue)
+            {
+                return null;
             }
 
-            // Tự động tạo token sau khi đăng ký thành công
-            var token = GenerateJwtToken(user);
-            return token;
+            return dateTime.Value.Kind switch
+            {
+                DateTimeKind.Utc => dateTime,
+                DateTimeKind.Local => dateTime.Value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(dateTime.Value, DateTimeKind.Utc)
+            };
         }
 
         public async Task<UserDto> GetUserByUsernameAsync(string username)
@@ -436,7 +482,10 @@ namespace SORMS.API.Services
             {
                 FullName = registerDto.FullName ?? user.UserName,
                 Email = user.Email,
-                Phone = registerDto.Phone ?? ""
+                Phone = registerDto.Phone ?? "",
+                IdentityNumber = registerDto.IdentityNumber,
+                Gender = registerDto.Gender,
+                DateOfBirth = registerDto.DateOfBirth
             };
 
             _context.Staffs.Add(staff);

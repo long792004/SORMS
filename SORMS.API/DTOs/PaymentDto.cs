@@ -7,12 +7,26 @@ namespace SORMS.API.DTOs
         public string? CancelUrl { get; set; }
     }
 
+    public class CreateRoomPaymentLinkDto
+    {
+        public DateTime ExpectedCheckInDate { get; set; }
+        public DateTime ExpectedCheckOutDate { get; set; }
+        public int NumberOfResidents { get; set; } = 1;
+        public string? ReturnUrl { get; set; }
+        public string? CancelUrl { get; set; }
+    }
+
     public class PaymentStatusDto
     {
         public int InvoiceId { get; set; }
         public long PayOSOrderId { get; set; }
         public string Status { get; set; } = string.Empty;
         public decimal Amount { get; set; }
+        public decimal OriginalAmount { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public int? VoucherId { get; set; }
+        public string? VoucherCode { get; set; }
         public string Description { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? PaidAt { get; set; }
@@ -29,6 +43,11 @@ namespace SORMS.API.DTOs
         public int? InvoiceId { get; set; }
         public string? Status { get; set; }
         public string? QrCodeDataUrl { get; set; }
+    }
+
+    public class ApplyVoucherRequestDto
+    {
+        public string VoucherCode { get; set; } = string.Empty;
     }
 
     public class PaymentWebhookDto
@@ -181,11 +200,19 @@ namespace SORMS.API.DTOs
         public int? RoomId { get; set; }
         public string RoomNumber { get; set; } = string.Empty;
         public decimal Amount { get; set; }
+        public decimal OriginalAmount { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public int? VoucherId { get; set; }
+        public string? VoucherCode { get; set; }
         public string Description { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public string? CheckoutUrl { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? PaidAt { get; set; }
         public long? PayOSOrderId { get; set; }
+        public DateTime? BookingCheckInDate { get; set; }
+        public DateTime? BookingCheckOutDate { get; set; }
+        public int? BookingNumberOfResidents { get; set; }
     }
 }

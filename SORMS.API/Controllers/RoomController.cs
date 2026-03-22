@@ -20,7 +20,7 @@ namespace SORMS.API.Controllers
         /// Lấy danh sách tất cả phòng - Tất cả roles có thể xem
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff,Resident")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var rooms = await _roomService.GetAllRoomsAsync();
@@ -31,7 +31,7 @@ namespace SORMS.API.Controllers
         /// Lấy thông tin phòng theo ID - Tất cả roles có thể xem
         /// </summary>
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,Staff,Resident")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(int id)
         {
             var room = await _roomService.GetRoomByIdAsync(id);
@@ -87,7 +87,7 @@ namespace SORMS.API.Controllers
         /// Lấy danh sách phòng trống - Tất cả roles có thể xem
         /// </summary>
         [HttpGet("available")]
-        [Authorize(Roles = "Admin,Staff,Resident")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAvailableRooms([FromQuery] DateTime? checkIn, [FromQuery] DateTime? checkOut)
         {
             if (checkIn.HasValue && checkOut.HasValue && checkOut.Value.Date <= checkIn.Value.Date)

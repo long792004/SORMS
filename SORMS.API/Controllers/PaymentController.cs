@@ -149,9 +149,54 @@ namespace SORMS.API.Controllers
         // ==================== Payment Endpoints ====================
 
         /// <summary>
+        /// Apply a voucher code to a pending invoice
+        /// </summary>
+        [Authorize(Roles = "Resident")]
+        [HttpPost("invoice/{invoiceId}/apply-voucher")]
+        public async Task<IActionResult> ApplyVoucherToInvoice(int invoiceId, [FromBody] ApplyVoucherRequestDto dto)
+        {
+            try
+            {
+                var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(userIdString))
+                {
+                    return Unauthorized(new { success = false, message = "User ID not found." });
+                }
+
+                var invoice = await _paymentService.ApplyVoucherToInvoiceAsync(invoiceId, dto.VoucherCode, userIdString);
+                return Ok(new { success = true, message = "Voucher applied successfully.", data = invoice });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Invoice or voucher not found while applying voucher to invoice {InvoiceId}", invoiceId);
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Forbidden voucher apply request for invoice {InvoiceId}", invoiceId);
+                return StatusCode(StatusCodes.Status403Forbidden, new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid voucher apply request for invoice {InvoiceId}", invoiceId);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid voucher apply payload for invoice {InvoiceId}", invoiceId);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error applying voucher to invoice {InvoiceId}", invoiceId);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Create a PayOS payment link for an invoice
         /// </summary>
-        [HttpPost("create-payment-link/{invoiceId}")]
+        [HttpPost("create-payment-link/{invoiceId:int}")]
         public async Task<IActionResult> CreatePaymentLink(int invoiceId, [FromBody] CreatePaymentLinkDto dto)
         {
             try
@@ -166,6 +211,51 @@ namespace SORMS.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error creating payment link: {ex.Message}");
+                return BadRequest(new PaymentResponseDto
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
+        /// Create booking hold + invoice + PayOS payment link for a room (Resident only)
+        /// </summary>
+        [Authorize(Roles = "Resident")]
+        [HttpPost("create-payment-link/room/{roomId:int}")]
+        public async Task<IActionResult> CreateRoomBookingPaymentLink(int roomId, [FromBody] CreateRoomPaymentLinkDto dto)
+        {
+            try
+            {
+                var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!int.TryParse(userIdString, out int userId))
+                {
+                    return Unauthorized(new { success = false, message = "User ID not found or invalid." });
+                }
+
+                var resident = await _residentService.GetResidentByUserIdAsync(userId);
+                if (resident == null)
+                {
+                    return BadRequest(new { success = false, message = "Resident profile not found." });
+                }
+
+                var response = await _paymentService.CreateRoomBookingPaymentLinkAsync(roomId, resident.Id, dto);
+                if (!response.Success)
+                {
+                    return BadRequest(response);
+                }
+
+                return Ok(response);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Room is currently held by another user"))
+            {
+                _logger.LogWarning(ex, "Room {RoomId} is not available for booking hold", roomId);
+                return BadRequest(new { success = false, message = "Room is currently held by another user" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating room booking payment link for room {RoomId}", roomId);
                 return BadRequest(new PaymentResponseDto
                 {
                     Success = false,

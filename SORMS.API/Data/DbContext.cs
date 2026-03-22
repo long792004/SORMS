@@ -27,6 +27,8 @@ namespace SORMS.API.Data
         public DbSet<ReservationGuest> ReservationGuests { get; set; }
         public DbSet<RoomInspection> RoomInspections { get; set; }
         public DbSet<Rating> Ratings { get; set; }
+        public DbSet<Voucher> Vouchers { get; set; }
+        public DbSet<Review> Reviews { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -49,6 +51,12 @@ namespace SORMS.API.Data
                 .WithMany(r => r.Invoices)
                 .HasForeignKey(i => i.ResidentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Voucher)
+                .WithMany(v => v.Invoices)
+                .HasForeignKey(i => i.VoucherId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // ==========================
             // 🔹 Room ↔ RoomPricingConfig (1-n)
@@ -143,9 +151,87 @@ namespace SORMS.API.Data
                 .HasForeignKey(r => r.RoomId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // ==========================
+            // 🔹 CheckInRecord ↔ Review (1-1)
+            // ==========================
+            modelBuilder.Entity<CheckInRecord>()
+                .HasOne(c => c.Review)
+                .WithOne(r => r.CheckIn)
+                .HasForeignKey<Review>(r => r.CheckInId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ==========================
+            // 🔹 Resident ↔ Review (1-n)
+            // ==========================
+            modelBuilder.Entity<Review>()
+                .HasOne(r => r.Resident)
+                .WithMany(res => res.Reviews)
+                .HasForeignKey(r => r.ResidentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ==========================
+            // 🔹 Room ↔ Review (1-n)
+            // ==========================
+            modelBuilder.Entity<Review>()
+                .HasOne(r => r.Room)
+                .WithMany(room => room.Reviews)
+                .HasForeignKey(r => r.RoomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Review>()
+                .Property(r => r.CreatedAt)
+                .HasDefaultValueSql("NOW()");
+
+            modelBuilder.Entity<Review>()
+                .Property(r => r.IsHidden)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<Invoice>()
+                .Property(i => i.DiscountAmount)
+                .HasColumnType("decimal(18,2)")
+                .HasDefaultValue(0m);
+
+            modelBuilder.Entity<Invoice>()
+                .Property(i => i.TotalAmount)
+                .HasColumnType("decimal(18,2)");
+
+            modelBuilder.Entity<Voucher>()
+                .HasIndex(v => v.Code)
+                .IsUnique();
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.Code)
+                .HasMaxLength(50);
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.Value)
+                .HasColumnType("decimal(18,2)");
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.MinInvoiceAmount)
+                .HasColumnType("decimal(18,2)")
+                .HasDefaultValue(0m);
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.MaxDiscountAmount)
+                .HasColumnType("decimal(18,2)");
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.IsActive)
+                .HasDefaultValue(true);
+
+            modelBuilder.Entity<Voucher>()
+                .Property(v => v.CreatedAt)
+                .HasDefaultValueSql("NOW()");
+
             modelBuilder.Entity<Room>()
                 .Property(r => r.MaxCapacity)
                 .HasDefaultValue(1);
+
+            modelBuilder.Entity<Room>()
+                .Property(r => r.Amenities)
+                .HasColumnType("text[]")
+                .HasDefaultValueSql("ARRAY[]::text[]");
 
             modelBuilder.Entity<CheckInRecord>()
                 .Property(c => c.NumberOfResidents)
