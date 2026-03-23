@@ -22,6 +22,10 @@
         public string? Notes { get; set; }
         public string? Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
+        public bool IdentityVerified { get; set; }
+        public string? IdentityDocumentUrl { get; set; }
+        public DateTime? IdentityVerifiedAt { get; set; }
+        public int? IdentityVerifiedByUserId { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
 }

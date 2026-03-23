@@ -13,7 +13,7 @@ export function NotificationDropdown() {
   const { data, isLoading } = useMyNotifications();
   const markRead = useMarkNotificationRead();
   const notifications = useMemo(() => listOf(data), [data]);
-  const unreadCount = notifications.filter((item: any) => !item.isRead).length;
+  const unreadCount = role === "Admin" ? 0 : notifications.filter((item: any) => !item.isRead).length;
   const targetPage = role === "Admin" ? "/admin/notifications" : role === "Staff" ? "/staff/notifications" : "/resident/notifications";
 
   return (
@@ -46,7 +46,7 @@ export function NotificationDropdown() {
                 <p className="text-slate-800">{item.message ?? item.content ?? "Notification"}</p>
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <span className="text-[11px] text-slate-500">{item.createdAt ?? item.time ?? ""}</span>
-                  {!item.isRead && item.id ? (
+                  {role !== "Admin" && !item.isRead && item.id ? (
                     <Button variant="ghost" className="px-2 py-1 text-[11px]" onClick={() => markRead.mutate(item.id)}>
                       Mark read
                     </Button>

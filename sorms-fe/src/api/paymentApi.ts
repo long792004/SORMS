@@ -11,6 +11,7 @@ export const paymentApi = {
   createPaymentLink: (invoiceId: string | number, payload: { returnUrl?: string; cancelUrl?: string }) =>
     api.post(`/Payment/create-payment-link/${invoiceId}`, payload),
   requestHotelPayment: (invoiceId: string | number) => api.post(`/Payment/payment-at-hotel/${invoiceId}`),
+  markInvoicePaid: (invoiceId: string | number) => api.post(`/Payment/mark-paid/${invoiceId}`),
   getPaymentStatus: (invoiceId: string | number) => api.get(`/Payment/payment-status/${invoiceId}`),
   verifyPayment: (orderCode: string | number) => api.post(`/Payment/verify-payment?orderCode=${orderCode}`),
   payosWebhook: (payload: Record<string, unknown>) => api.post("/Payment/payos-webhook", payload),

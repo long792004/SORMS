@@ -40,7 +40,11 @@
                 Notes = r.Notes,
                 IsActive = r.IsActive,
                 Gender = r.Gender,
-                DateOfBirth = r.DateOfBirth
+                DateOfBirth = r.DateOfBirth,
+                IdentityVerified = r.IdentityVerified,
+                IdentityDocumentUrl = r.IdentityDocumentUrl,
+                IdentityVerifiedAt = r.IdentityVerifiedAt,
+                IdentityVerifiedByUserId = r.IdentityVerifiedByUserId
             });
         }
 
@@ -72,7 +76,11 @@
                 Notes = resident.Notes,
                 IsActive = resident.IsActive,
                 Gender = resident.Gender,
-                DateOfBirth = resident.DateOfBirth
+                DateOfBirth = resident.DateOfBirth,
+                IdentityVerified = resident.IdentityVerified,
+                IdentityDocumentUrl = resident.IdentityDocumentUrl,
+                IdentityVerifiedAt = resident.IdentityVerifiedAt,
+                IdentityVerifiedByUserId = resident.IdentityVerifiedByUserId
             };
         }
 
@@ -278,7 +286,11 @@
                 Notes = r.Notes,
                 IsActive = r.IsActive,
                 Gender = r.Gender,
-                DateOfBirth = r.DateOfBirth
+                DateOfBirth = r.DateOfBirth,
+                IdentityVerified = r.IdentityVerified,
+                IdentityDocumentUrl = r.IdentityDocumentUrl,
+                IdentityVerifiedAt = r.IdentityVerifiedAt,
+                IdentityVerifiedByUserId = r.IdentityVerifiedByUserId
             });
         }
 
@@ -334,7 +346,11 @@
                 Notes = resident.Notes,
                 IsActive = resident.IsActive,
                 Gender = resident.Gender,
-                DateOfBirth = resident.DateOfBirth
+                DateOfBirth = resident.DateOfBirth,
+                IdentityVerified = resident.IdentityVerified,
+                IdentityDocumentUrl = resident.IdentityDocumentUrl,
+                IdentityVerifiedAt = resident.IdentityVerifiedAt,
+                IdentityVerifiedByUserId = resident.IdentityVerifiedByUserId
             };
         }
 

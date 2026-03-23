@@ -10,7 +10,9 @@ export function useMyNotifications() {
     queryFn: async () => {
       if (role === "Admin") {
         const response = await notificationApi.getSentHistory();
-        return response.data?.data ?? response.data;
+        const items = response.data?.data ?? response.data;
+        const list = Array.isArray(items) ? items : [];
+        return list.filter((item: any) => !item?.residentId && item?.targetRole !== "Resident");
       }
 
       if (role === "Staff") {

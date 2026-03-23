@@ -12,5 +12,7 @@ export const residentApi = {
   checkInResident: (residentId: string | number, date: string) => api.put(`/Resident/${residentId}/checkin?date=${encodeURIComponent(date)}`),
   checkOutResident: (residentId: string | number, date: string) => api.put(`/Resident/${residentId}/checkout?date=${encodeURIComponent(date)}`),
   updateAccount: (payload: { email: string; phone: string }) => api.put("/Resident/update-account", payload),
-  updateProfile: (payload: Record<string, unknown>) => api.put("/Resident/update-profile", payload)
+  updateProfile: (payload: Record<string, unknown>) => api.put("/Resident/update-profile", payload),
+  verifyIdentity: (payload: { residentId: number; isVerified: boolean; identityDocumentUrl?: string }) =>
+    api.post("/Resident/verify-identity", payload)
 };

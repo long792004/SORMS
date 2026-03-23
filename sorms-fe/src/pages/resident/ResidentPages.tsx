@@ -595,13 +595,23 @@ export function ResidentCreateServiceRequestPage() {
   const [serviceType, setServiceType] = useState("Maintenance");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Normal");
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
 
   const createRequest = useMutation({
     mutationFn: () => serviceRequestApi.create({ title, serviceType, description, priority }),
+    onMutate: () => {
+      setSubmitError("");
+      setSubmitSuccess("");
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["resident", "service-requests"] });
       setTitle("");
       setDescription("");
+      setSubmitSuccess("Yêu cầu dịch vụ đã được gửi thành công.");
+    },
+    onError: (error) => {
+      setSubmitError(toApiErrorMessage(error, "Không thể gửi yêu cầu dịch vụ. Vui lòng thử lại."));
     }
   });
 
@@ -610,6 +620,8 @@ export function ResidentCreateServiceRequestPage() {
       <h1 className="section-title">Create Service Request</h1>
       <div className="glass-card max-w-2xl rounded-xl p-4">
         <div className="space-y-2">
+          {submitError ? <p className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{submitError}</p> : null}
+          {submitSuccess ? <p className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{submitSuccess}</p> : null}
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           <input value={serviceType} onChange={(event) => setServiceType(event.target.value)} placeholder="Service type" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Description" className="h-28 w-full rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5" />
@@ -618,7 +630,9 @@ export function ResidentCreateServiceRequestPage() {
             <option value="Normal">Normal</option>
             <option value="High">High</option>
           </select>
-          <Button className="w-full" onClick={() => createRequest.mutate()}>Submit Request</Button>
+          <Button className="w-full" onClick={() => createRequest.mutate()} disabled={createRequest.isPending}>
+            {createRequest.isPending ? "Đang gửi yêu cầu..." : "Submit Request"}
+          </Button>
         </div>
       </div>
     </section>

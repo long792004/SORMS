@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router-dom";
 import { OccupancyChart } from "@/components/charts/OccupancyChart";
 import { RevenueChart } from "@/components/charts/RevenueChart";
 import { Button } from "@/components/ui/Button";
@@ -716,17 +717,38 @@ export function AdminRoomsPage() {
 export const AdminRoomAvailabilityPage = () => <section className="page-shell"><h1 className="section-title">Room Availability</h1></section>;
 
 export function AdminPaymentsPage() {
+  const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["admin", "payments"], queryFn: async () => unwrap(await paymentApi.getAllInvoices()) });
+
+  const markAsPaid = useMutation({
+    mutationFn: (invoiceId: number) => paymentApi.markInvoicePaid(invoiceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "payments"] });
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin", "invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] });
+    }
+  });
 
   return (
     <section className="page-shell space-y-4">
-      <h1 className="section-title">Payment Management</h1>
+      <h1 className="section-title">Invoice & Payment Management</h1>
       <div className="space-y-2">
         {listOf(data).map((invoice: any, index) => (
           <article key={invoice.id ?? index} className="glass-card rounded-xl p-3 text-sm">
             <p className="font-semibold">Invoice #{invoice.id}</p>
             <p className="muted-text">Amount: {Number(invoice.totalAmount ?? invoice.amount ?? 0).toLocaleString("vi-VN")} VND</p>
             <p className="text-primary">Status: {invoice.status ?? "Pending"}</p>
+            {String(invoice.status ?? "").toLowerCase() !== "paid" ? (
+              <div className="mt-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => markAsPaid.mutate(Number(invoice.id))}
+                  disabled={markAsPaid.isPending}
+                >
+                  {markAsPaid.isPending ? "Updating..." : "Mark as Paid"}
+                </Button>
+              </div>
+            ) : null}
           </article>
         ))}
       </div>
@@ -744,11 +766,27 @@ export function AdminNotificationsPage() {
   const [residentId, setResidentId] = useState("");
   const [individualMessage, setIndividualMessage] = useState("");
   const [individualError, setIndividualError] = useState<string | null>(null);
+  const [broadcastError, setBroadcastError] = useState<string | null>(null);
+  const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
+  const [individualSuccess, setIndividualSuccess] = useState<string | null>(null);
+  const [historyRoleFilter, setHistoryRoleFilter] = useState<"All" | "Resident" | "Staff">("All");
   const { data } = useMyNotifications();
+  const { data: sentHistoryData } = useSentNotificationHistory();
   const broadcast = useBroadcastNotification();
   const individual = useIndividualNotification();
   const notifications = useMemo(() => listOf(data), [data]);
+  const sentHistory = useMemo(() => listOf(sentHistoryData), [sentHistoryData]);
   const parsedResidentId = Number.parseInt(residentId.trim(), 10);
+  const formatDateTime = (value?: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("vi-VN");
+  };
+
+  const filteredSentHistory = useMemo(() => {
+    if (historyRoleFilter === "All") return sentHistory.slice(0, 8);
+    return sentHistory.filter((item: any) => String(item?.targetRole ?? "").toLowerCase() === historyRoleFilter.toLowerCase()).slice(0, 8);
+  }, [sentHistory, historyRoleFilter]);
 
   const sendIndividualNotification = () => {
     if (!Number.isInteger(parsedResidentId) || parsedResidentId <= 0) {
@@ -762,6 +800,7 @@ export function AdminNotificationsPage() {
     }
 
     setIndividualError(null);
+    setIndividualSuccess(null);
     individual.mutate(
       { residentId: parsedResidentId, title: "Individual Notice", message: individualMessage.trim() },
       {
@@ -769,9 +808,33 @@ export function AdminNotificationsPage() {
           setResidentId("");
           setIndividualMessage("");
           setIndividualError(null);
+          setIndividualSuccess("Đã gửi thông báo cá nhân thành công.");
         },
         onError: (error: any) => {
           setIndividualError(getApiErrorMessage(error, "Không thể gửi thông báo cá nhân."));
+          setIndividualSuccess(null);
+        }
+      }
+    );
+  };
+
+  const sendBroadcastNotification = () => {
+    if (!message.trim()) {
+      setBroadcastError("Vui lòng nhập nội dung thông báo broadcast.");
+      return;
+    }
+
+    setBroadcastError(null);
+    setBroadcastSuccess(null);
+    broadcast.mutate(
+      { message: message.trim(), title: title.trim(), targetRole },
+      {
+        onSuccess: () => {
+          setMessage("");
+          setBroadcastSuccess("Đã gửi broadcast thành công.");
+        },
+        onError: (error: any) => {
+          setBroadcastError(getApiErrorMessage(error, "Không thể gửi broadcast notification."));
         }
       }
     );
@@ -782,25 +845,58 @@ export function AdminNotificationsPage() {
       <h1 className="section-title">Notifications</h1>
       <div className="glass-card rounded-xl p-4">
         <h3 className="font-semibold">Broadcast Notification</h3>
+        {broadcastError ? <p className="mt-2 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{broadcastError}</p> : null}
+        {broadcastSuccess ? <p className="mt-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{broadcastSuccess}</p> : null}
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" className="mt-3 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5" />
         <select value={targetRole} onChange={(event) => setTargetRole(event.target.value as "All" | "Resident" | "Staff")} className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5">
           <option value="All">All</option><option value="Resident">Resident</option><option value="Staff">Staff</option>
         </select>
         <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write broadcast message..." className="mt-3 min-h-28 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5" />
-        <Button className="mt-3" onClick={() => { if (!message.trim()) return; broadcast.mutate({ message: message.trim(), title: title.trim(), targetRole }, { onSuccess: () => setMessage("") }); }}>Send Broadcast</Button>
+        <Button className="mt-3" onClick={sendBroadcastNotification} disabled={broadcast.isPending}>{broadcast.isPending ? "Sending..." : "Send Broadcast"}</Button>
       </div>
 
       <div className="glass-card rounded-xl p-4">
         <h3 className="font-semibold">Individual Notification</h3>
         {individualError ? <p className="mt-2 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{individualError}</p> : null}
+        {individualSuccess ? <p className="mt-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{individualSuccess}</p> : null}
         <input value={residentId} onChange={(event) => setResidentId(event.target.value)} placeholder="Resident ID" className="mt-3 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5" />
         <textarea value={individualMessage} onChange={(event) => setIndividualMessage(event.target.value)} placeholder="Write message for one resident..." className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5" />
         <Button className="mt-3" onClick={sendIndividualNotification} disabled={individual.isPending}>{individual.isPending ? "Sending..." : "Send Individual"}</Button>
       </div>
 
+      <div className="glass-card rounded-xl p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Recent Sent Notifications</h3>
+          <div className="flex flex-wrap gap-2">
+            {(["All", "Resident", "Staff"] as const).map((role) => (
+              <Button key={role} variant="ghost" className={historyRoleFilter === role ? "border border-primary/40 bg-primary/10 text-primary" : ""} onClick={() => setHistoryRoleFilter(role)}>
+                {role}
+              </Button>
+            ))}
+            <Link to="/admin/notifications/history" className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:text-slate-200 dark:hover:bg-white/10">
+              View Full History
+            </Link>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {filteredSentHistory.map((item: any, index) => (
+            <article key={item.id ?? index} className="rounded-xl border border-slate-200/70 bg-white/70 p-3 text-sm text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
+              <p>{item.message ?? item.content ?? "Notification"}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Type: {item.type ?? "-"} • Target: {item.targetRole ?? (item.residentId ? "Resident" : item.staffId ? "Staff" : "-")} • {formatDateTime(item.createdAt ?? item.time)}
+              </p>
+            </article>
+          ))}
+          {filteredSentHistory.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Không có thông báo phù hợp bộ lọc.</p> : null}
+        </div>
+      </div>
+
       <div className="space-y-2">
-        {notifications.slice(0, 8).map((item: any, index) => (
-          <article key={item.id ?? index} className="glass-card rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200">{item.message ?? item.content ?? "Notification"}</article>
+        {notifications.slice(0, 4).map((item: any, index) => (
+          <article key={item.id ?? index} className="glass-card rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200">
+            <p>{item.message ?? item.content ?? "Notification"}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(item.createdAt ?? item.time)}</p>
+          </article>
         ))}
       </div>
     </section>
@@ -810,51 +906,401 @@ export function AdminNotificationsPage() {
 export function AdminNotificationHistoryPage() {
   const { data } = useSentNotificationHistory();
   const notifications = useMemo(() => listOf(data), [data]);
+  const [roleFilter, setRoleFilter] = useState<"All" | "Resident" | "Staff">("All");
+  const [typeFilter, setTypeFilter] = useState<"All" | "Broadcast" | "Individual">("All");
+  const [keyword, setKeyword] = useState("");
+
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter((item: any) => {
+      const role = String(item?.targetRole ?? "");
+      const type = String(item?.type ?? "");
+      const message = String(item?.message ?? item?.content ?? "").toLowerCase();
+      const matchesRole = roleFilter === "All" || role.toLowerCase() === roleFilter.toLowerCase();
+      const matchesType = typeFilter === "All" || type.toLowerCase() === typeFilter.toLowerCase();
+      const matchesKeyword = !keyword.trim() || message.includes(keyword.trim().toLowerCase());
+      return matchesRole && matchesType && matchesKeyword;
+    });
+  }, [notifications, roleFilter, typeFilter, keyword]);
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("vi-VN");
+  };
 
   return (
     <section className="page-shell space-y-4">
       <h1 className="section-title">Notification History</h1>
-      {notifications.map((item: any, index) => (
+      <div className="glass-card rounded-xl p-4">
+        <div className="grid gap-2 md:grid-cols-3">
+          <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Search message" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "All" | "Resident" | "Staff")} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+            <option value="All">All Roles</option>
+            <option value="Resident">Resident</option>
+            <option value="Staff">Staff</option>
+          </select>
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "All" | "Broadcast" | "Individual")} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+            <option value="All">All Types</option>
+            <option value="Broadcast">Broadcast</option>
+            <option value="Individual">Individual</option>
+          </select>
+        </div>
+      </div>
+
+      {filteredNotifications.map((item: any, index) => (
         <article key={item.id ?? index} className="glass-card rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200">
           <p>{item.message ?? item.content ?? "Notification"}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.createdAt ?? item.time ?? ""}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Type: {item.type ?? "-"} • Target: {item.targetRole ?? (item.residentId ? "Resident" : item.staffId ? "Staff" : "-")} • {formatDateTime(item.createdAt ?? item.time)}
+          </p>
         </article>
       ))}
+      {filteredNotifications.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Không tìm thấy notification phù hợp.</p> : null}
     </section>
   );
 }
 
 export function AdminServiceRequestsPage() {
+  const queryClient = useQueryClient();
+  const [rejectReason, setRejectReason] = useState("Thiếu thông tin chi tiết");
+  const [staffFeedback, setStaffFeedback] = useState("Đã tiếp nhận và xử lý yêu cầu");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Approved" | "Completed">("All");
   const { data } = useQuery({ queryKey: ["admin", "service", "all"], queryFn: async () => unwrap(await serviceRequestApi.getAll()) });
+
+  const filteredRequests = useMemo(() => {
+    const requests = listOf(data);
+    if (statusFilter === "All") {
+      return requests;
+    }
+
+    const normalizedFilter = statusFilter.toLowerCase();
+    return requests.filter((request: any) => String(request?.status ?? "").toLowerCase() === normalizedFilter);
+  }, [data, statusFilter]);
+
+  const review = useMutation({
+    mutationFn: ({ id, status, feedback }: { id: number; status: "Approved" | "InProgress" | "Completed" | "Rejected"; feedback: string }) =>
+      serviceRequestApi.review(id, { status, staffFeedback: feedback }),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "service", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard", "services"] });
+    },
+    onError: (error: any) => {
+      setActionError(getApiErrorMessage(error, "Không thể xử lý yêu cầu dịch vụ."));
+    }
+  });
 
   return (
     <section className="page-shell space-y-4">
       <h1 className="section-title">Service Requests</h1>
-      {listOf(data).map((request: any, index) => (
-        <article key={request.id ?? index} className="glass-card rounded-xl p-3 text-sm">
-          <p className="font-semibold">{request.title ?? request.serviceType}</p>
-          <p className="muted-text">{request.status}</p>
+      <div className="flex flex-wrap gap-2">
+        {(["All", "Pending", "Approved", "Completed"] as const).map((status) => {
+          const isActive = statusFilter === status;
+          return (
+            <Button
+              key={status}
+              variant="ghost"
+              className={isActive ? "border border-primary/40 bg-primary/10 text-primary" : ""}
+              onClick={() => setStatusFilter(status)}
+            >
+              {status}
+            </Button>
+          );
+        })}
+      </div>
+      <div className="flex flex-col gap-2 md:flex-row">
+        <input value={staffFeedback} onChange={(event) => setStaffFeedback(event.target.value)} placeholder="Default feedback" className="h-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+        <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Default reject reason" className="h-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+      </div>
+      {actionError ? <p className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{actionError}</p> : null}
+      {filteredRequests.map((request: any, index) => {
+        const isCompleted = String(request?.status ?? "").toLowerCase() === "completed";
+
+        return (
+          <article key={request.id ?? index} className="glass-card rounded-xl p-4 text-sm">
+            <p className="font-semibold">{request.title ?? request.serviceType}</p>
+            <p className="muted-text mt-1">{request.description ?? "Không có mô tả"}</p>
+            <p className="mt-1 text-primary">Status: {request.status}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="ghost" onClick={() => review.mutate({ id: Number(request.id), status: "Approved", feedback: staffFeedback })} disabled={review.isPending || isCompleted}>Approve</Button>
+              <Button variant="ghost" onClick={() => review.mutate({ id: Number(request.id), status: "InProgress", feedback: staffFeedback })} disabled={review.isPending || isCompleted}>In Progress</Button>
+              <Button variant="ghost" onClick={() => review.mutate({ id: Number(request.id), status: "Completed", feedback: staffFeedback })} disabled={review.isPending || isCompleted}>Complete</Button>
+              <Button variant="ghost" onClick={() => review.mutate({ id: Number(request.id), status: "Rejected", feedback: rejectReason })} disabled={review.isPending || isCompleted}>Reject</Button>
+              {isCompleted && request?.id ? (
+                <Link to={`/admin/service-requests/${request.id}`} className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:text-slate-200 dark:hover:bg-white/10">
+                  View Details
+                </Link>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+      {filteredRequests.length === 0 ? <p className="muted-text">Không có yêu cầu nào ở trạng thái {statusFilter}.</p> : null}
+    </section>
+  );
+}
+
+export function AdminServiceRequestDetailPage() {
+  const { id } = useParams();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["admin", "service", "detail", id],
+    enabled: Boolean(id),
+    queryFn: async () => unwrap(await serviceRequestApi.getById(String(id)))
+  });
+
+  const request = data as any;
+  const formatDateTime = (value?: string) => {
+    if (!value) {
+      return "-";
+    }
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("vi-VN");
+  };
+
+  return (
+    <section className="page-shell space-y-4">
+      <h1 className="section-title">Service Request Detail</h1>
+
+      {isLoading ? <LoadingSkeleton lines={6} /> : null}
+      {isError ? <p className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">Không thể tải chi tiết yêu cầu dịch vụ.</p> : null}
+
+      {!isLoading && !isError && request ? (
+        <article className="glass-card rounded-xl p-4 text-sm">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <p className="muted-text">Request ID</p>
+              <p className="font-semibold">#{request.id ?? "-"}</p>
+            </div>
+            <div>
+              <p className="muted-text">Status</p>
+              <p className="font-semibold text-primary">{request.status ?? "-"}</p>
+            </div>
+            <div>
+              <p className="muted-text">Title</p>
+              <p className="font-semibold">{request.title ?? request.serviceType ?? "-"}</p>
+            </div>
+            <div>
+              <p className="muted-text">Service Type</p>
+              <p>{request.serviceType ?? "-"}</p>
+            </div>
+            <div>
+              <p className="muted-text">Resident</p>
+              <p>{request.residentName ?? `Resident #${request.residentId ?? "-"}`}</p>
+            </div>
+            <div>
+              <p className="muted-text">Priority</p>
+              <p>{request.priority ?? "-"}</p>
+            </div>
+            <div>
+              <p className="muted-text">Request Date</p>
+              <p>{formatDateTime(request.requestDate)}</p>
+            </div>
+            <div>
+              <p className="muted-text">Last Updated</p>
+              <p>{formatDateTime(request.lastUpdated)}</p>
+            </div>
+            <div>
+              <p className="muted-text">Reviewed By</p>
+              <p>{request.reviewedBy ?? "-"}</p>
+            </div>
+            <div>
+              <p className="muted-text">Reviewed Date</p>
+              <p>{formatDateTime(request.reviewedDate)}</p>
+            </div>
+            <div>
+              <p className="muted-text">Completed Date</p>
+              <p>{formatDateTime(request.completedDate)}</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="muted-text">Description</p>
+            <p className="mt-1 whitespace-pre-wrap">{request.description ?? "-"}</p>
+          </div>
+
+          <div className="mt-4">
+            <p className="muted-text">Staff Feedback</p>
+            <p className="mt-1 whitespace-pre-wrap">{request.staffFeedback ?? "-"}</p>
+          </div>
+
+          <div className="mt-4">
+            <Link to="/admin/service-requests" className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-white/15 dark:text-slate-200 dark:hover:bg-white/10">
+              Back to Service Requests
+            </Link>
+          </div>
+        </article>
+      ) : null}
+    </section>
+  );
+}
+export const AdminReviewServiceRequestPage = () => <section className="page-shell"><h1 className="section-title">Review Service Request</h1></section>;
+
+export function AdminReportsRevenuePage() {
+  const queryClient = useQueryClient();
+  const [reviewFeedback, setReviewFeedback] = useState("Báo cáo hợp lệ.");
+  const [rejectFeedback, setRejectFeedback] = useState("Thiếu dữ liệu hoặc cần bổ sung thông tin.");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Reviewed" | "Rejected">("All");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const { data } = useQuery({ queryKey: ["admin", "reports", "all"], queryFn: async () => unwrap(await reportApi.getReports()) });
+
+  const refreshReports = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin", "reports", "all"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "dashboard", "reports"] });
+    queryClient.invalidateQueries({ queryKey: ["staff", "reports"] });
+  };
+
+  const review = useMutation({
+    mutationFn: ({ id, status, adminFeedback }: { id: number; status: "Reviewed" | "Rejected"; adminFeedback: string }) =>
+      reportApi.reviewReport(id, { status, adminFeedback }),
+    onSuccess: () => {
+      setActionError(null);
+      setActionSuccess("Đã cập nhật trạng thái báo cáo thành công.");
+      refreshReports();
+    },
+    onError: (error: any) => {
+      setActionSuccess(null);
+      setActionError(getApiErrorMessage(error, "Không thể review báo cáo."));
+    }
+  });
+
+  const generateRevenue = useMutation({
+    mutationFn: () => reportApi.createRevenueReport({}),
+    onSuccess: () => {
+      setActionError(null);
+      setActionSuccess("Đã tạo báo cáo doanh thu.");
+      refreshReports();
+    },
+    onError: (error: any) => setActionError(getApiErrorMessage(error, "Không thể tạo báo cáo doanh thu."))
+  });
+
+  const generateOccupancy = useMutation({
+    mutationFn: () => reportApi.createOccupancyReport({}),
+    onSuccess: () => {
+      setActionError(null);
+      setActionSuccess("Đã tạo báo cáo occupancy.");
+      refreshReports();
+    },
+    onError: (error: any) => setActionError(getApiErrorMessage(error, "Không thể tạo báo cáo occupancy."))
+  });
+
+  const generateServiceUsage = useMutation({
+    mutationFn: () => reportApi.createServiceUsageReport({}),
+    onSuccess: () => {
+      setActionError(null);
+      setActionSuccess("Đã tạo báo cáo service usage.");
+      refreshReports();
+    },
+    onError: (error: any) => setActionError(getApiErrorMessage(error, "Không thể tạo báo cáo service usage."))
+  });
+
+  const reports = useMemo(() => {
+    const allReports = listOf(data);
+    if (statusFilter === "All") return allReports;
+    return allReports.filter((report: any) => String(report?.status ?? "").toLowerCase() === statusFilter.toLowerCase());
+  }, [data, statusFilter]);
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("vi-VN");
+  };
+
+  return (
+    <section className="page-shell space-y-4">
+      <h1 className="section-title">Reports Management</h1>
+
+      <div className="glass-card rounded-xl p-4">
+        <h3 className="font-semibold">Generate System Reports</h3>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="ghost" onClick={() => generateRevenue.mutate()} disabled={generateRevenue.isPending}>{generateRevenue.isPending ? "Generating..." : "Generate Revenue"}</Button>
+          <Button variant="ghost" onClick={() => generateOccupancy.mutate()} disabled={generateOccupancy.isPending}>{generateOccupancy.isPending ? "Generating..." : "Generate Occupancy"}</Button>
+          <Button variant="ghost" onClick={() => generateServiceUsage.mutate()} disabled={generateServiceUsage.isPending}>{generateServiceUsage.isPending ? "Generating..." : "Generate Service Usage"}</Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(["All", "Pending", "Reviewed", "Rejected"] as const).map((status) => (
+          <Button key={status} variant="ghost" className={statusFilter === status ? "border border-primary/40 bg-primary/10 text-primary" : ""} onClick={() => setStatusFilter(status)}>
+            {status}
+          </Button>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-2 md:flex-row">
+        <input value={reviewFeedback} onChange={(event) => setReviewFeedback(event.target.value)} placeholder="Feedback when reviewing" className="h-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+        <input value={rejectFeedback} onChange={(event) => setRejectFeedback(event.target.value)} placeholder="Feedback when rejecting" className="h-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+      </div>
+
+      {actionError ? <p className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{actionError}</p> : null}
+      {actionSuccess ? <p className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{actionSuccess}</p> : null}
+
+      {reports.map((report: any, index) => {
+        const isPending = String(report?.status ?? "").toLowerCase() === "pending";
+        return (
+          <article key={report.id ?? index} className="glass-card rounded-xl p-4 text-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold">{report.title ?? "Untitled report"}</p>
+                <p className="mt-1 text-primary">Status: {report.status ?? "-"}</p>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Generated: {formatDateTime(report.generatedDate)}</p>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-slate-700 dark:text-slate-200">{report.content ?? "-"}</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Created by: {report.createdBy ?? "-"} • Reviewed by: {report.reviewedBy ?? "-"} • Reviewed date: {formatDateTime(report.reviewedDate)}</p>
+            {report.adminFeedback ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Admin feedback: {report.adminFeedback}</p> : null}
+
+            {isPending ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="ghost" onClick={() => review.mutate({ id: Number(report.id), status: "Reviewed", adminFeedback: reviewFeedback })} disabled={review.isPending}>Approve</Button>
+                <Button variant="ghost" onClick={() => review.mutate({ id: Number(report.id), status: "Rejected", adminFeedback: rejectFeedback })} disabled={review.isPending}>Reject</Button>
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
+
+      {reports.length === 0 ? <p className="muted-text">Không có báo cáo phù hợp trạng thái {statusFilter}.</p> : null}
+    </section>
+  );
+}
+
+export function AdminReportsOccupancyPage() {
+  const { data } = useQuery({ queryKey: ["admin", "reports", "occupancy"], queryFn: async () => unwrap(await reportApi.getReports()) });
+  const reports = useMemo(() => listOf(data).filter((item: any) => String(item?.title ?? "").toLowerCase().includes("tỷ lệ phòng") || String(item?.title ?? "").toLowerCase().includes("occupancy")), [data]);
+  return (
+    <section className="page-shell space-y-4">
+      <h1 className="section-title">Occupancy Report</h1>
+      <OccupancyChart />
+      {reports.map((report: any, index) => (
+        <article key={report.id ?? index} className="glass-card rounded-xl p-3 text-sm">
+          <p className="font-semibold">{report.title}</p>
+          <p className="muted-text mt-1 whitespace-pre-wrap">{report.content}</p>
         </article>
       ))}
     </section>
   );
 }
 
-export const AdminServiceRequestDetailPage = () => <section className="page-shell"><h1 className="section-title">Service Request Detail</h1></section>;
-export const AdminReviewServiceRequestPage = () => <section className="page-shell"><h1 className="section-title">Review Service Request</h1></section>;
-
-export function AdminReportsRevenuePage() {
-  const { data } = useQuery({ queryKey: ["admin", "reports", "revenue"], queryFn: async () => unwrap(await reportApi.getReports()) });
-  return <section className="page-shell space-y-4"><h1 className="section-title">Revenue Report</h1>{listOf(data).map((report: any, index) => <article key={report.id ?? index} className="glass-card rounded-xl p-3 text-sm"><p className="font-semibold">{report.title}</p></article>)}</section>;
-}
-
-export function AdminReportsOccupancyPage() {
-  return <section className="page-shell space-y-4"><h1 className="section-title">Occupancy Report</h1><OccupancyChart /></section>;
-}
-
 export function AdminReportsServiceUsagePage() {
   const { data } = useQuery({ queryKey: ["admin", "reports", "service"], queryFn: async () => unwrap(await reportApi.getReports()) });
-  return <section className="page-shell space-y-4"><h1 className="section-title">Service Usage Report</h1>{listOf(data).map((report: any, index) => <article key={report.id ?? index} className="glass-card rounded-xl p-3 text-sm"><p className="font-semibold">{report.title}</p></article>)}</section>;
+  const reports = useMemo(() => listOf(data).filter((item: any) => String(item?.title ?? "").toLowerCase().includes("dịch vụ") || String(item?.title ?? "").toLowerCase().includes("service")), [data]);
+  return (
+    <section className="page-shell space-y-4">
+      <h1 className="section-title">Service Usage Report</h1>
+      {reports.map((report: any, index) => (
+        <article key={report.id ?? index} className="glass-card rounded-xl p-3 text-sm">
+          <p className="font-semibold">{report.title}</p>
+          <p className="muted-text mt-1 whitespace-pre-wrap">{report.content}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Status: {report.status ?? "-"}</p>
+        </article>
+      ))}
+      {reports.length === 0 ? <p className="muted-text">Chưa có báo cáo service usage.</p> : null}
+    </section>
+  );
 }
 
 export function AdminVouchersPage() {

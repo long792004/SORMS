@@ -257,6 +257,30 @@ namespace SORMS.API.Controllers
         }
 
         /// <summary>
+        /// Mark invoice as paid (Admin/Staff only)
+        /// </summary>
+        [Authorize(Roles = "Admin,Staff")]
+        [HttpPost("mark-paid/{invoiceId:int}")]
+        public async Task<IActionResult> MarkInvoiceAsPaid(int invoiceId)
+        {
+            try
+            {
+                var result = await _paymentService.MarkInvoiceAsPaidAsync(invoiceId);
+                if (!result)
+                {
+                    return NotFound(new { success = false, message = "Invoice not found" });
+                }
+
+                return Ok(new { success = true, message = "Invoice marked as paid" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking invoice {InvoiceId} as paid", invoiceId);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Create booking hold + invoice + PayOS payment link for a room (Resident only)
         /// </summary>
         [Authorize(Roles = "Resident")]

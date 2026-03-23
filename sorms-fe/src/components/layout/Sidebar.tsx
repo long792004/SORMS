@@ -36,7 +36,7 @@ const adminItems: NavItem[] = [
   { to: "/admin/staff", label: "Staff" },
   { to: "/admin/rooms", label: "Rooms" },
   { to: "/admin/reviews", label: "Reviews" },
-  { to: "/admin/payments", label: "Payments" },
+  { to: "/admin/payments", label: "Invoices" },
   { to: "/admin/service-requests", label: "Service Requests" },
   { to: "/admin/reports/revenue", label: "Reports" },
   { to: "/admin/vouchers", label: "Vouchers" },

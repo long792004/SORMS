@@ -10,6 +10,7 @@ import { serviceRequestApi } from "@/api/serviceRequestApi";
 import { paymentApi } from "@/api/paymentApi";
 import { reportApi } from "@/api/reportApi";
 import { notificationApi } from "@/api/notificationApi";
+import { roomInspectionApi } from "@/api/roomInspectionApi";
 import { getRoomImageUrls, resolveMediaUrl } from "@/utils/media";
 
 const listOf = (value: unknown): any[] => (Array.isArray(value) ? value : []);
@@ -70,9 +71,35 @@ export function StaffCheckInOutPage() {
     queryFn: async () => unwrap(await checkInApi.pendingCheckOut())
   });
 
+  const pendingCheckOutList = listOf(pendingCheckOut);
+
+  const { data: inspectedCheckInRecordIdsData } = useQuery({
+    queryKey: ["staff", "checkin", "inspections", pendingCheckOutList.map((item: any) => item.id).join(",")],
+    enabled: pendingCheckOutList.length > 0,
+    queryFn: async () => {
+      const checks = await Promise.all(
+        pendingCheckOutList.map(async (item: any) => {
+          try {
+            await roomInspectionApi.getByCheckInRecordId(Number(item.id));
+            return Number(item.id);
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      return checks.filter((id): id is number => Number.isFinite(id));
+    }
+  });
+
   const { data: invoicesData } = useQuery({
     queryKey: ["staff", "checkin", "invoices"],
     queryFn: async () => unwrap(await paymentApi.getAllInvoices())
+  });
+
+  const { data: residentsData } = useQuery({
+    queryKey: ["staff", "checkin", "residents"],
+    queryFn: async () => unwrap(await residentApi.getResidents())
   });
 
   const invoiceMap = useMemo(() => {
@@ -117,6 +144,44 @@ export function StaffCheckInOutPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] })
   });
 
+  const createInspection = useMutation({
+    mutationFn: (checkInRecordId: number) =>
+      roomInspectionApi.createInspection({
+        checkInRecordId,
+        furnitureStatus: "OK",
+        equipmentStatus: "OK",
+        roomConditionStatus: "OK",
+        result: "OK",
+        additionalFee: 0,
+        notes: "Quick inspection from check-out approval page"
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin", "inspections"] });
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin", "pending-checkout"] });
+    }
+  });
+
+  const verifyIdentity = useMutation({
+    mutationFn: (residentId: number) => residentApi.verifyIdentity({ residentId, isVerified: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin", "residents"] });
+      queryClient.invalidateQueries({ queryKey: ["staff", "residents"] });
+    }
+  });
+
+  const residentMap = useMemo(() => {
+    const map = new Map<number, any>();
+    listOf(residentsData).forEach((resident: any) => {
+      const id = Number(resident.id);
+      if (Number.isFinite(id)) {
+        map.set(id, resident);
+      }
+    });
+    return map;
+  }, [residentsData]);
+
+  const inspectedCheckInRecordIds = useMemo(() => new Set<number>(listOf(inspectedCheckInRecordIdsData) as number[]), [inspectedCheckInRecordIdsData]);
+
   return (
     <section className="page-shell space-y-5">
       <h1 className="section-title">Check-in / Check-out Approval</h1>
@@ -130,6 +195,8 @@ export function StaffCheckInOutPage() {
             const key = `${item.residentId ?? ""}-${item.roomId ?? ""}`;
             const invoice = invoiceMap.get(key);
             const paid = String(invoice?.status ?? "").toLowerCase() === "paid";
+            const resident = residentMap.get(Number(item.residentId));
+            const identityVerified = Boolean(resident?.identityVerified ?? resident?.IdentityVerified ?? false);
             const holdExpiresAt = item.holdExpiresAt ?? invoice?.expirationTime ?? null;
             const holdExpiresMs = holdExpiresAt ? new Date(holdExpiresAt).getTime() : 0;
             const holdState = holdExpiresMs > Date.now() ? "Active" : holdExpiresMs > 0 ? "Expired" : "Unknown";
@@ -139,11 +206,29 @@ export function StaffCheckInOutPage() {
                 <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
                 <p className="muted-text">{String(item.expectedCheckInDate ?? "").slice(0, 10)} → {String(item.expectedCheckOutDate ?? "").slice(0, 10)}</p>
                 <p className={`mt-1 ${paid ? "text-emerald-400" : "text-amber-400"}`}>Invoice: {invoice ? `#${invoice.id} - ${invoice.status}` : "Chưa tìm thấy invoice"}</p>
+                <p className={`mt-1 ${identityVerified ? "text-emerald-400" : "text-rose-300"}`}>
+                  CCCD verification: {identityVerified ? "Verified" : "Not verified"}
+                </p>
                 <p className={`mt-1 ${holdState === "Active" ? "text-amber-300" : holdState === "Expired" ? "text-rose-300" : "text-slate-400"}`}>
                   Hold: {holdState} • Expires: {formatDateTime(holdExpiresAt)}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Button variant="ghost" onClick={() => approveCheckIn.mutate(item.id)} disabled={!paid || approveCheckIn.isPending}>Approve Check-in</Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => approveCheckIn.mutate(item.id)}
+                    disabled={!paid || !identityVerified || approveCheckIn.isPending}
+                  >
+                    Approve Check-in
+                  </Button>
+                  {!identityVerified ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => verifyIdentity.mutate(Number(item.residentId))}
+                      disabled={verifyIdentity.isPending}
+                    >
+                      {verifyIdentity.isPending ? "Verifying..." : "Verify CCCD"}
+                    </Button>
+                  ) : null}
                   <Button variant="ghost" onClick={() => rejectCheckIn.mutate(item.id)} disabled={rejectCheckIn.isPending}>Reject</Button>
                 </div>
               </article>
@@ -156,13 +241,21 @@ export function StaffCheckInOutPage() {
         <h3 className="font-semibold">Pending Check-out Requests</h3>
         <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" className="mt-2 h-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
         <div className="mt-3 space-y-3">
-          {listOf(pendingCheckOut).length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Không có yêu cầu check-out chờ duyệt.</p> : null}
-          {listOf(pendingCheckOut).map((item: any, index) => (
+          {pendingCheckOutList.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Không có yêu cầu check-out chờ duyệt.</p> : null}
+          {pendingCheckOutList.map((item: any, index) => (
             <article key={item.id ?? index} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
               <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
               <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
+              <p className={`mt-1 ${inspectedCheckInRecordIds.has(Number(item.id)) ? "text-emerald-400" : "text-amber-300"}`}>
+                Inspection: {inspectedCheckInRecordIds.has(Number(item.id)) ? "Completed" : "Missing"}
+              </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Button variant="ghost" onClick={() => approveCheckOut.mutate(item.id)} disabled={approveCheckOut.isPending}>Approve Check-out</Button>
+                {!inspectedCheckInRecordIds.has(Number(item.id)) ? (
+                  <Button variant="ghost" onClick={() => createInspection.mutate(Number(item.id))} disabled={createInspection.isPending}>
+                    {createInspection.isPending ? "Creating inspection..." : "Create Inspection"}
+                  </Button>
+                ) : null}
                 <Button variant="ghost" onClick={() => rejectCheckOut.mutate(item.id)} disabled={rejectCheckOut.isPending}>Reject</Button>
               </div>
             </article>

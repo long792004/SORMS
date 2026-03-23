@@ -19,17 +19,17 @@ namespace SORMS.API.Services
 
         public async Task<ServiceRequestDto> CreateRequestAsync(CreateServiceRequestDto dto, int residentId)
         {
-            // ? Ki?m tra Resident d� check-in chua
+            // Kiểm tra Resident đã check-in chưa
             var resident = await _context.Residents.FindAsync(residentId);
             if (resident == null)
-                throw new Exception("Kh�ng t�m th?y th�ng tin cu d�n");
+                throw new Exception("Không tìm thấy thông tin cư dân");
 
-            // Ki?m tra c� check-in record v?i status "CheckedIn"
+            // Kiểm tra có check-in record với status "CheckedIn"
             var hasActiveCheckIn = await _context.CheckInRecords
                 .AnyAsync(c => c.ResidentId == residentId && c.Status == "CheckedIn");
 
             if (!hasActiveCheckIn)
-                throw new Exception("B?n ph?i check-in ph�ng tru?c khi g?i y�u c?u d?ch v?");
+                throw new Exception("Bạn phải check-in phòng trước khi gửi yêu cầu dịch vụ");
 
             var request = new ServiceRequest
             {
@@ -112,7 +112,7 @@ namespace SORMS.API.Services
             if (request == null || request.ResidentId != residentId)
                 return false;
 
-            // Ch? cho ph�p update n?u status l� Pending
+            // Chỉ cho phép update nếu status là Pending
             if (request.Status != "Pending")
                 return false;
 
@@ -133,7 +133,7 @@ namespace SORMS.API.Services
             if (request == null || request.ResidentId != residentId)
                 return false;
 
-            // Ch? cho ph�p x�a n?u status l� Pending
+            // Chỉ cho phép xóa nếu status là Pending
             if (request.Status != "Pending")
                 return false;
 
