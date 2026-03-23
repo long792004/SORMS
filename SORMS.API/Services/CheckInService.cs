@@ -18,15 +18,16 @@ namespace SORMS.API.Services
         }
 
         // Resident tạo yêu cầu check-in vào phòng
-        public async Task<CheckInRecordDto> CreateCheckInRequestAsync(int residentId, int roomId, DateTime expectedCheckInDate, DateTime expectedCheckOutDate, int numberOfResidents)
+        public async Task<CheckInRecordDto> CreateCheckInRequestAsync(int residentId, CreateCheckInRequestDto request)
         {
-            var requestedCheckIn = NormalizeUtcDate(expectedCheckInDate);
-            var requestedCheckOut = NormalizeUtcDate(expectedCheckOutDate);
+            var requestedCheckIn = NormalizeUtcDate(request.CheckInDate);
+            var requestedCheckOut = NormalizeUtcDate(request.CheckOutDate);
             var numberOfNights = (requestedCheckOut - requestedCheckIn).Days;
+            var numberOfResidents = Math.Max(1, request.NumberOfResidents);
             
             Console.WriteLine($"[CheckInService] CreateCheckInRequest DEBUG:");
-            Console.WriteLine($"  Input expectedCheckInDate: {expectedCheckInDate:yyyy-MM-dd HH:mm:ss} (Kind={expectedCheckInDate.Kind})");
-            Console.WriteLine($"  Input expectedCheckOutDate: {expectedCheckOutDate:yyyy-MM-dd HH:mm:ss} (Kind={expectedCheckOutDate.Kind})");
+            Console.WriteLine($"  Input expectedCheckInDate: {request.CheckInDate:yyyy-MM-dd HH:mm:ss} (Kind={request.CheckInDate.Kind})");
+            Console.WriteLine($"  Input expectedCheckOutDate: {request.CheckOutDate:yyyy-MM-dd HH:mm:ss} (Kind={request.CheckOutDate.Kind})");
             Console.WriteLine($"  After Normalize requestedCheckIn: {requestedCheckIn:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine($"  After Normalize requestedCheckOut: {requestedCheckOut:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine($"  Difference in days: {numberOfNights}");
@@ -56,6 +57,7 @@ namespace SORMS.API.Services
                 throw new Exception("Bạn đã có booking trùng trong khoảng thời gian này.");
 
             // Kiểm tra phòng có tồn tại
+            var roomId = request.RoomId;
             var room = await _context.Rooms.FindAsync(roomId);
             if (room == null)
                 throw new Exception("Phòng không tồn tại");
@@ -102,6 +104,14 @@ namespace SORMS.API.Services
                 ExpectedCheckInDate = requestedCheckIn,
                 ExpectedCheckOutDate = requestedCheckOut,
                 NumberOfResidents = numberOfResidents,
+                BookerFullName = request.BookerFullName?.Trim(),
+                BookerEmail = request.BookerEmail?.Trim(),
+                BookerPhone = request.BookerPhone?.Trim(),
+                BookerIdentityNumber = request.BookerIdentityNumber?.Trim(),
+                GuestList = request.GuestList?.Trim(),
+                BedPreference = request.BedPreference?.Trim(),
+                SmokingPreference = request.SmokingPreference?.Trim(),
+                EarlyCheckInRequested = request.EarlyCheckInRequested,
                 Status = "PendingCheckIn",
                 RequestType = "CheckIn"
             };
@@ -114,7 +124,7 @@ namespace SORMS.API.Services
             var openInvoices = await _context.Invoices
                 .Where(i => i.ResidentId == residentId &&
                             i.RoomId == roomId &&
-                            (i.Status == "Pending" || i.Status == "Created"))
+                            (i.Status == "Pending" || i.Status == "Created" || i.Status == "AwaitingHotelPayment"))
                 .ToListAsync();
 
             foreach (var openInvoice in openInvoices)
@@ -129,6 +139,7 @@ namespace SORMS.API.Services
                 Amount = dailyRate * numberOfNights,
                 DiscountAmount = 0,
                 TotalAmount = dailyRate * numberOfNights,
+                PaymentMethod = "PayOS",
                 Status = "Pending",
                 Description = $"Booking fee for room {room.RoomNumber}: {numberOfNights} night(s) x {dailyRate:N0}/day",
                 CreatedAt = DateTime.UtcNow
@@ -220,7 +231,7 @@ namespace SORMS.API.Services
             record.RejectReason = "Customer cancelled booking request.";
 
             var pendingInvoice = await _context.Invoices
-                .Where(i => i.ResidentId == residentId && i.RoomId == record.RoomId && (i.Status == "Pending" || i.Status == "Created"))
+                .Where(i => i.ResidentId == residentId && i.RoomId == record.RoomId && (i.Status == "Pending" || i.Status == "Created" || i.Status == "AwaitingHotelPayment"))
                 .OrderByDescending(i => i.CreatedAt)
                 .FirstOrDefaultAsync();
 
@@ -296,7 +307,7 @@ namespace SORMS.API.Services
                 var pendingInvoice = await _context.Invoices
                     .Where(i => i.ResidentId == record.ResidentId &&
                                 i.RoomId == record.RoomId &&
-                                (i.Status == "Pending" || i.Status == "Created"))
+                                (i.Status == "Pending" || i.Status == "Created" || i.Status == "AwaitingHotelPayment"))
                     .OrderByDescending(i => i.CreatedAt)
                     .FirstOrDefaultAsync();
 
@@ -521,6 +532,14 @@ namespace SORMS.API.Services
                 ExpectedCheckInDate = record.ExpectedCheckInDate,
                 ExpectedCheckOutDate = record.ExpectedCheckOutDate,
                 NumberOfResidents = record.NumberOfResidents,
+                BookerFullName = record.BookerFullName,
+                BookerEmail = record.BookerEmail,
+                BookerPhone = record.BookerPhone,
+                BookerIdentityNumber = record.BookerIdentityNumber,
+                GuestList = record.GuestList,
+                BedPreference = record.BedPreference,
+                SmokingPreference = record.SmokingPreference,
+                EarlyCheckInRequested = record.EarlyCheckInRequested,
                 ApprovedTime = record.ApprovedTime,
                 CheckInTime = record.CheckInTime,
                 CheckOutRequestTime = record.CheckOutRequestTime,

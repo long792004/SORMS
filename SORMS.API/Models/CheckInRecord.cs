@@ -34,6 +34,29 @@ namespace SORMS.API.Models
         [Required]
         public int NumberOfResidents { get; set; } = 1;
 
+        [MaxLength(120)]
+        public string? BookerFullName { get; set; }
+
+        [MaxLength(120)]
+        public string? BookerEmail { get; set; }
+
+        [MaxLength(30)]
+        public string? BookerPhone { get; set; }
+
+        [MaxLength(30)]
+        public string? BookerIdentityNumber { get; set; }
+
+        [MaxLength(1000)]
+        public string? GuestList { get; set; }
+
+        [MaxLength(50)]
+        public string? BedPreference { get; set; }
+
+        [MaxLength(50)]
+        public string? SmokingPreference { get; set; }
+
+        public bool EarlyCheckInRequested { get; set; } = false;
+
         public DateTime? ApprovedTime { get; set; } // Thời gian được phê duyệt
 
         public DateTime? CheckInTime { get; set; } // Thời gian check-in thực tế

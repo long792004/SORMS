@@ -15,6 +15,7 @@ namespace SORMS.API.Interfaces
 
         // PayOS Payment
         Task<PaymentResponseDto> CreatePaymentLinkAsync(int invoiceId, string? returnUrl, string? cancelUrl);
+        Task<InvoiceDetailDto> RequestHotelPaymentAsync(int invoiceId, string currentUserId);
         Task<PaymentResponseDto> CreateRoomBookingPaymentLinkAsync(int roomId, int residentId, CreateRoomPaymentLinkDto dto);
         Task<PaymentStatusDto?> GetPaymentStatusAsync(int invoiceId);
         Task<bool> VerifyPaymentAsync(long orderCode);

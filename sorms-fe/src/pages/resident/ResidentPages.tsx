@@ -47,6 +47,27 @@ const formatRemainingTime = (expiresAt?: string | null) => {
   return `Còn ${minutes}m ${seconds}s`;
 };
 
+const countNights = (checkIn: string, checkOut: string) => {
+  if (!checkIn || !checkOut || checkOut <= checkIn) return 0;
+  const inTime = new Date(checkIn).getTime();
+  const outTime = new Date(checkOut).getTime();
+  if (Number.isNaN(inTime) || Number.isNaN(outTime) || outTime <= inTime) return 0;
+  return Math.ceil((outTime - inTime) / (1000 * 60 * 60 * 24));
+};
+
+const normalizeDateOnly = (value: unknown) => String(value ?? "").slice(0, 10);
+
+const formatBookingStatus = (status: string) => {
+  const s = String(status ?? "").toLowerCase();
+  if (!s) return "Pending";
+  if (s.includes("checkedout")) return "Completed";
+  if (s.includes("checkedin")) return "Checked In";
+  if (s.includes("cancel")) return "Cancelled";
+  if (s.includes("pending")) return "Pending";
+  if (s.includes("onhold")) return "On Hold";
+  return status;
+};
+
 export function ResidentDashboardPage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const role = useAuthStore((state) => state.role);
@@ -149,6 +170,7 @@ export function ResidentProfilePage() {
 }
 
 export function ResidentBookingPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["resident", "checkin", "history"],
@@ -157,8 +179,10 @@ export function ResidentBookingPage() {
       return response.data?.data ?? response.data;
     }
   });
+  const { data: invoiceData } = useMyInvoices();
 
   const bookings = listOf(data);
+  const invoices = listOf(invoiceData);
 
   const cancelBooking = useMutation({
     mutationFn: (checkInRecordId: number) => checkInApi.cancelCheckIn({ checkInRecordId }),
@@ -176,15 +200,46 @@ export function ResidentBookingPage() {
   return (
     <section className="page-shell space-y-4">
       <h1 className="section-title">My Booking History</h1>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" onClick={() => navigate("/resident/invoices")}>View payment history</Button>
+        <Button variant="ghost" onClick={() => navigate("/contact")}>Contact support</Button>
+      </div>
       {bookings.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">No booking records found.</p> : null}
       <div className="space-y-2">
         {bookings.map((item: any, index) => (
           <article key={item.id ?? index} className="glass-card rounded-xl p-4 text-sm">
+            {(() => {
+              const bookingId = item.id ?? index;
+              const bookingRoomId = String(item.roomId ?? "");
+              const bookingCheckIn = normalizeDateOnly(item.expectedCheckInDate ?? item.checkInDate);
+              const bookingCheckOut = normalizeDateOnly(item.expectedCheckOutDate ?? item.checkOutDate);
+              const linkedInvoice = invoices.find((invoice: any) => {
+                const sameRoom = String(invoice.roomId ?? "") === bookingRoomId;
+                const sameCheckIn = normalizeDateOnly(invoice.bookingCheckInDate ?? invoice.checkInDate) === bookingCheckIn;
+                const sameCheckOut = normalizeDateOnly(invoice.bookingCheckOutDate ?? invoice.checkOutDate) === bookingCheckOut;
+                return sameRoom && sameCheckIn && sameCheckOut;
+              });
+
+              return (
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold">Room {item.roomNumber ?? item.roomId}</p>
-                <p className="muted-text">{String(item.expectedCheckInDate ?? item.checkInDate ?? "").slice(0, 10)} → {String(item.expectedCheckOutDate ?? item.checkOutDate ?? "").slice(0, 10)}</p>
-                <p className="mt-1 text-primary">Status: {item.status ?? item.bookingStatus}</p>
+                <p className="font-semibold">Booking #{bookingId}</p>
+                <p className="muted-text">Room {item.roomNumber ?? item.roomId} • {bookingCheckIn} → {bookingCheckOut}</p>
+                <p className="mt-1 text-primary">Status: {formatBookingStatus(item.bookingStatus ?? item.status)}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Guests: {item.numberOfResidents ?? "-"}</p>
+                {item.bookerFullName ? <p className="text-xs text-slate-500 dark:text-slate-400">Booker: {item.bookerFullName}</p> : null}
+                {item.bookerPhone ? <p className="text-xs text-slate-500 dark:text-slate-400">Phone: {item.bookerPhone}</p> : null}
+                {item.bedPreference || item.smokingPreference || item.earlyCheckInRequested ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Requests: {[item.bedPreference, item.smokingPreference, item.earlyCheckInRequested ? "Early check-in" : ""].filter(Boolean).join(" • ")}
+                  </p>
+                ) : null}
+                <p className="text-xs text-slate-500 dark:text-slate-400">Payment: {linkedInvoice ? `${linkedInvoice.status ?? "Pending"} • ${(Number(linkedInvoice.totalAmount ?? linkedInvoice.amount ?? 0)).toLocaleString("vi-VN")} VND` : "No invoice linked"}</p>
+                {linkedInvoice?.id ? <p className="text-xs text-slate-500 dark:text-slate-400">Invoice ID: {linkedInvoice.id}</p> : null}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {linkedInvoice?.id ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate(`/checkout?invoiceId=${linkedInvoice.id}`)}>View booking details</Button> : null}
+                  {linkedInvoice?.id ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate("/resident/invoices")}>Open invoices</Button> : null}
+                </div>
               </div>
               {isCancellable(item.status ?? item.bookingStatus) ? (
                 <Button variant="ghost" className="shrink-0 text-rose-400 hover:text-rose-300" onClick={() => cancelBooking.mutate(Number(item.id))} disabled={cancelBooking.isPending}>
@@ -192,6 +247,8 @@ export function ResidentBookingPage() {
                 </Button>
               ) : null}
             </div>
+              );
+            })()}
           </article>
         ))}
       </div>
@@ -624,6 +681,15 @@ export function CheckoutPage() {
   const [voucherApplied, setVoucherApplied] = useState(false);
   const [voucherMessage, setVoucherMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [identityNumber, setIdentityNumber] = useState("");
+  const [guestList, setGuestList] = useState("");
+  const [bedPreference, setBedPreference] = useState("Double Bed");
+  const [smokingPreference, setSmokingPreference] = useState("Non-smoking");
+  const [earlyCheckIn, setEarlyCheckIn] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("payos");
   const applyVoucher = useApplyVoucher();
   const createLink = useCreatePaymentLink();
   const { data } = useInvoiceDetail(invoiceId || undefined);
@@ -656,7 +722,15 @@ export function CheckoutPage() {
         roomId: parsedRoomId,
         checkInDate: toApiDateTime(checkIn),
         checkOutDate: toApiDateTime(checkOut),
-        numberOfResidents: Math.max(1, guests || 1)
+        numberOfResidents: Math.max(1, guests || 1),
+        bookerFullName: fullName.trim() || undefined,
+        bookerEmail: email.trim() || undefined,
+        bookerPhone: phone.trim() || undefined,
+        bookerIdentityNumber: identityNumber.trim() || undefined,
+        guestList: guestList.trim() || undefined,
+        bedPreference,
+        smokingPreference,
+        earlyCheckInRequested: earlyCheckIn
       });
     },
     onSuccess: async () => {
@@ -666,7 +740,7 @@ export function CheckoutPage() {
 
       const invoicesResponse = await paymentApi.getMyInvoices();
       const invoices = listOf(invoicesResponse.data?.data ?? invoicesResponse.data);
-      const pendingInvoice = invoices.find((invoice: any) => ["Pending", "Created"].includes(String(invoice.status ?? "")));
+      const pendingInvoice = invoices.find((invoice: any) => ["Pending", "Created", "AwaitingHotelPayment"].includes(String(invoice.status ?? "")));
 
       if (pendingInvoice?.id) {
         navigate(
@@ -685,22 +759,41 @@ export function CheckoutPage() {
 
   const invoice = data ?? {};
   const currentPaymentStatus = String(paymentStatusData?.status ?? invoice.status ?? "Pending");
+  const currentPaymentMethod = String(paymentStatusData?.paymentMethod ?? (invoice as any).paymentMethod ?? "PayOS");
   const isPaid = currentPaymentStatus === "Paid";
+  const isAwaitingHotelPayment = currentPaymentStatus === "AwaitingHotelPayment";
   const holdExpiresAt = (invoice as any)?.expirationTime ?? (invoice as any)?.expiredAt ?? (invoice as any)?.holdExpiresAt ?? null;
   const holdRemaining = formatRemainingTime(holdExpiresAt);
   const bookingCheckIn = String((invoice as any)?.bookingCheckInDate ?? (invoice as any)?.checkInDate ?? checkIn ?? "");
   const bookingCheckOut = String((invoice as any)?.bookingCheckOutDate ?? (invoice as any)?.checkOutDate ?? checkOut ?? "");
   const bookingRoomId = String((invoice as any)?.roomId ?? roomId ?? "");
   const bookingRoomNumber = String((invoice as any)?.roomNumber ?? decodeURIComponent(roomNumberFromQuery || "") ?? bookingRoomId);
+  const bookingGuests = Number((invoice as any)?.bookingNumberOfResidents ?? guests ?? 1);
+  const bookingNights = countNights(bookingCheckIn.slice(0, 10), bookingCheckOut.slice(0, 10));
   const originalAmount = Number((invoice as any)?.originalAmount ?? (invoice as any)?.amount ?? roomPriceFromQuery ?? 0);
   const discountAmount = Number((invoice as any)?.discountAmount ?? 0);
   const totalAmount = Number((invoice as any)?.totalAmount ?? (invoice as any)?.amount ?? roomPriceFromQuery ?? 0);
+  const estimatedTax = Math.round(originalAmount * 0.1);
+  const estimatedServiceFee = Math.round(originalAmount * 0.05);
 
   useEffect(() => {
     if (currentPaymentStatus === "Paid" && !paymentSuccess) {
       setPaymentSuccess(true);
     }
   }, [currentPaymentStatus, paymentSuccess]);
+
+  const requestHotelPayment = useMutation({
+    mutationFn: () => paymentApi.requestHotelPayment(invoiceId),
+    onSuccess: () => {
+      setPaymentError("");
+      queryClient.invalidateQueries({ queryKey: ["invoice", invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ["invoice", "payment-status", invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ["invoices", "mine"] });
+    },
+    onError: (error) => {
+      setPaymentError(toApiErrorMessage(error, "Không thể đăng ký thanh toán tại khách sạn."));
+    }
+  });
 
   return (
     <section className="page-shell space-y-5">
@@ -735,6 +828,32 @@ export function CheckoutPage() {
         </div>
       ) : null}
 
+      <div className="glass-card rounded-xl p-5">
+        <h2 className="text-lg font-semibold">Booking Form</h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Nhập thông tin người đặt, khách lưu trú và yêu cầu đặc biệt trước khi thanh toán.</p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Full name" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone number" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={identityNumber} onChange={(event) => setIdentityNumber(event.target.value)} placeholder="CMND/CCCD (nếu yêu cầu)" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <textarea value={guestList} onChange={(event) => setGuestList(event.target.value)} placeholder="Danh sách khách lưu trú (nếu nhiều người)" className="h-20 rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <select value={bedPreference} onChange={(event) => setBedPreference(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5">
+            <option value="Double Bed">Double bed</option>
+            <option value="Twin Bed">Twin bed</option>
+          </select>
+          <select value={smokingPreference} onChange={(event) => setSmokingPreference(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5">
+            <option value="Non-smoking">Non-smoking room</option>
+            <option value="Smoking">Smoking room</option>
+          </select>
+          <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm dark:border-white/10">
+            <input type="checkbox" checked={earlyCheckIn} onChange={(event) => setEarlyCheckIn(event.target.checked)} />
+            Early check-in
+          </label>
+        </div>
+      </div>
+
       {!invoiceId && !canCreateBookingAndInvoice ? (
         <div className="glass-card rounded-xl p-4 text-sm text-amber-200">
           Thiếu invoiceId. Vui lòng vào trang Invoice và chọn hóa đơn cần thanh toán.
@@ -744,16 +863,38 @@ export function CheckoutPage() {
         <p className="text-sm text-slate-500 dark:text-slate-400">Invoice ID: {invoiceId || "(add ?invoiceId=...)"}</p>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Phòng: {bookingRoomNumber || bookingRoomId || "-"}</p>
         <p className="text-sm text-slate-600 dark:text-slate-300">Ngày ở: {bookingCheckIn ? bookingCheckIn.slice(0, 10) : "-"} → {bookingCheckOut ? bookingCheckOut.slice(0, 10) : "-"}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Số đêm: {bookingNights || "-"} • Số khách: {bookingGuests}</p>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Mã giảm giá được tạo bởi Admin và được áp dụng ở bước thanh toán này.</p>
         <div className="mt-3 space-y-1 text-sm">
-          <p>Original Amount: {originalAmount.toLocaleString("vi-VN")} VND</p>
+          <p>Room cost: {originalAmount.toLocaleString("vi-VN")} VND</p>
+          <p>Estimated tax (10%): {estimatedTax.toLocaleString("vi-VN")} VND</p>
+          <p>Estimated service fee (5%): {estimatedServiceFee.toLocaleString("vi-VN")} VND</p>
           <p>Discount Amount: {discountAmount.toLocaleString("vi-VN")} VND</p>
-          <p className="font-semibold text-secondary">Total Amount: {totalAmount.toLocaleString("vi-VN")} VND</p>
+          <p className="font-semibold text-secondary">Final total: {totalAmount.toLocaleString("vi-VN")} VND</p>
           <p className="font-semibold">Payment Status: <span className={isPaid ? "text-emerald-400" : "text-amber-300"}>{currentPaymentStatus}</span></p>
           {!isPaid && holdExpiresAt ? (
             <p className="text-amber-300">Hold expires at: {new Date(holdExpiresAt).toLocaleString("vi-VN")} {holdRemaining ? `• ${holdRemaining}` : ""}</p>
           ) : null}
         </div>
+      </div>
+
+      <div className="glass-card rounded-xl p-5">
+        <h2 className="text-lg font-semibold">Payment Method</h2>
+        <div className="mt-3 space-y-2 text-sm">
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
+            <span>PayOS QR / E-wallet</span>
+            <input type="radio" name="paymentMethod" checked={paymentMethod === "payos"} onChange={() => setPaymentMethod("payos")} />
+          </label>
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
+            <span>Bank card</span>
+            <input type="radio" name="paymentMethod" checked={paymentMethod === "card"} onChange={() => setPaymentMethod("card")} />
+          </label>
+          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
+            <span>Pay at hotel</span>
+            <input type="radio" name="paymentMethod" checked={paymentMethod === "hotel"} onChange={() => setPaymentMethod("hotel")} />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Bank card sử dụng cổng PayOS checkout. Pay at hotel sẽ tạo trạng thái chờ thanh toán tại quầy lễ tân.</p>
       </div>
 
       <div className="glass-card rounded-xl p-5">
@@ -798,10 +939,16 @@ export function CheckoutPage() {
 
       <Button
         className="w-full max-w-sm"
-        disabled={!invoiceId || createLink.isPending || isPaid}
+        disabled={!invoiceId || createLink.isPending || requestHotelPayment.isPending || isPaid}
         onClick={() => {
           if (!invoiceId) return;
           setPaymentError("");
+
+          if (paymentMethod === "hotel") {
+            requestHotelPayment.mutate();
+            return;
+          }
+
           createLink.mutate(
             { invoiceId },
             {
@@ -811,17 +958,32 @@ export function CheckoutPage() {
                   qrCodeDataUrl: response.data?.qrCodeDataUrl,
                   orderCode: response.data?.orderCode
                 });
+
+                if (paymentMethod === "card" && response.data?.checkoutUrl) {
+                  window.open(response.data.checkoutUrl, "_blank");
+                }
+
                 queryClient.invalidateQueries({ queryKey: ["invoice", invoiceId] });
                 queryClient.invalidateQueries({ queryKey: ["invoice", "payment-status", invoiceId] });
               },
               onError: (error) => {
-                setPaymentError(toApiErrorMessage(error, "Không thể tạo QR thanh toán. Vui lòng thử lại."));
+                setPaymentError(toApiErrorMessage(error, "Không thể tạo phiên thanh toán. Vui lòng thử lại."));
               }
             }
           );
         }}
       >
-        {isPaid ? "Invoice đã thanh toán" : createLink.isPending ? "Đang tạo QR thanh toán..." : "Tạo QR thanh toán PayOS"}
+        {isPaid
+          ? "Invoice đã thanh toán"
+          : requestHotelPayment.isPending
+            ? "Đang đăng ký thanh toán tại khách sạn..."
+            : createLink.isPending
+              ? "Đang tạo phiên thanh toán..."
+              : paymentMethod === "hotel"
+                ? "Xác nhận thanh toán tại khách sạn"
+                : paymentMethod === "card"
+                  ? "Thanh toán bằng thẻ"
+                  : "Tạo QR thanh toán PayOS"}
       </Button>
 
       {paymentError ? <p className="text-sm text-rose-300">{paymentError}</p> : null}
@@ -837,10 +999,24 @@ export function CheckoutPage() {
         </div>
       ) : null}
 
-      {isPaid ? (
-        <Button variant="ghost" className="w-full max-w-sm" onClick={() => navigate(`/resident/checkin-status?roomId=${bookingRoomId}&checkIn=${bookingCheckIn.slice(0, 10)}&checkOut=${bookingCheckOut.slice(0, 10)}`)}>
-          Đến trang gửi yêu cầu check-in
-        </Button>
+      {isPaid || isAwaitingHotelPayment ? (
+        <div className="glass-card rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-5 text-sm">
+          <p className="font-semibold text-emerald-300">Booking confirmation</p>
+          <p className="mt-1 text-emerald-200">Booking ID: {invoiceId || "-"}</p>
+          <p className="text-emerald-200">Status: {isPaid ? "Confirmed" : "Pending"}</p>
+          <p className="text-emerald-200">Room: {bookingRoomNumber || bookingRoomId || "-"}</p>
+          <p className="text-emerald-200">Check-in / Check-out: {bookingCheckIn ? bookingCheckIn.slice(0, 10) : "-"} → {bookingCheckOut ? bookingCheckOut.slice(0, 10) : "-"}</p>
+          <p className="text-emerald-200">Payment method: {currentPaymentMethod}</p>
+          <p className="text-emerald-200">{isPaid ? "Total paid" : "Total due"}: {totalAmount.toLocaleString("vi-VN")} VND</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="ghost" onClick={() => navigate("/resident/bookings")}>View booking details</Button>
+            <Button variant="ghost" onClick={() => navigate("/resident/bookings")}>Cancel booking</Button>
+            <Button variant="ghost" onClick={() => navigate("/contact")}>Contact support</Button>
+            <Button variant="ghost" onClick={() => navigate(`/resident/checkin-status?roomId=${bookingRoomId}&checkIn=${bookingCheckIn.slice(0, 10)}&checkOut=${bookingCheckOut.slice(0, 10)}`)}>
+              Go to check-in flow
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       <Button variant="ghost" className="w-full max-w-sm" onClick={() => navigate("/resident/invoices")}>Quay lại danh sách invoice</Button>

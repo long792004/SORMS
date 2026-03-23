@@ -220,6 +220,43 @@ namespace SORMS.API.Controllers
         }
 
         /// <summary>
+        /// Mark invoice as hotel payment request (Resident only)
+        /// </summary>
+        [Authorize(Roles = "Resident")]
+        [HttpPost("payment-at-hotel/{invoiceId:int}")]
+        public async Task<IActionResult> RequestPayAtHotel(int invoiceId)
+        {
+            try
+            {
+                var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(userIdString))
+                {
+                    return Unauthorized(new { success = false, message = "User ID not found." });
+                }
+
+                var invoice = await _paymentService.RequestHotelPaymentAsync(invoiceId, userIdString);
+                return Ok(new { success = true, message = "Đã đăng ký thanh toán tại khách sạn.", data = invoice });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error requesting pay-at-hotel for invoice {InvoiceId}", invoiceId);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Create booking hold + invoice + PayOS payment link for a room (Resident only)
         /// </summary>
         [Authorize(Roles = "Resident")]

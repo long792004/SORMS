@@ -5,7 +5,7 @@ namespace SORMS.API.Interfaces
     public interface ICheckInService
     {
         // Resident tạo yêu cầu check-in
-        Task<CheckInRecordDto> CreateCheckInRequestAsync(int residentId, int roomId, DateTime expectedCheckInDate, DateTime expectedCheckOutDate, int numberOfResidents);
+        Task<CheckInRecordDto> CreateCheckInRequestAsync(int residentId, CreateCheckInRequestDto request);
         
         // Resident tạo yêu cầu check-out
         Task<CheckInRecordDto> CreateCheckOutRequestAsync(int residentId, int checkInRecordId);

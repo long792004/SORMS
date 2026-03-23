@@ -59,7 +59,7 @@ builder.Services.AddHttpClient<IChatbotService, ChatbotService>(client =>
     builder.Services.AddHostedService<ReservationExpiryBackgroundService>();
     builder.Services.AddScoped<IVoucherService, VoucherService>();
     builder.Services.AddScoped<IReviewService, ReviewService>();
-    builder.Services.AddHostedService<BookingCleanupBackgroundService>();
+    builder.Services.AddHostedService<BookingManagementBackgroundService>();
 
     // PayOS Setup (Now properly configured in PaymentService)
     // var payOsClientId = builder.Configuration["PayOS:ClientId"] ?? "";

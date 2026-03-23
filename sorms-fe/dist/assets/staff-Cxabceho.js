@@ -1,1 +1,0 @@
-import{c as e}from"./client-BWeh6IJH.js";const l={getAll:()=>e.get("/Staff"),getById:t=>e.get(`/Staff/${t}`),update:(t,f)=>e.put(`/Staff/${t}`,f),delete:t=>e.delete(`/Staff/${t}`),getMyProfile:()=>e.get("/Staff/me"),updateMyProfile:t=>e.put("/Staff/me",t)};export{l as s};

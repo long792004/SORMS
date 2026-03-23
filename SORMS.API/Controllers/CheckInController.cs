@@ -39,13 +39,7 @@ namespace SORMS.API.Controllers
                 }
 
                 Console.WriteLine($"[CheckIn API] Creating check-in request for ResidentId={residentId}, RoomId={request.RoomId}, CheckIn={request.CheckInDate:yyyy-MM-dd}, CheckOut={request.CheckOutDate:yyyy-MM-dd}");
-                var result = await _checkInService.CreateCheckInRequestAsync(
-                    residentId,
-                    request.RoomId,
-                    request.CheckInDate,
-                    request.CheckOutDate,
-                    request.NumberOfResidents
-                );
+                var result = await _checkInService.CreateCheckInRequestAsync(residentId, request);
                 return Ok(new { 
                     success = true, 
                     message = "Yêu cầu check-in đã được gửi. Vui lòng chờ Staff/Admin phê duyệt.", 

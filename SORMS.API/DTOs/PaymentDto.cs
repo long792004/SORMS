@@ -21,6 +21,7 @@ namespace SORMS.API.DTOs
         public int InvoiceId { get; set; }
         public long PayOSOrderId { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string PaymentMethod { get; set; } = "PayOS";
         public decimal Amount { get; set; }
         public decimal OriginalAmount { get; set; }
         public decimal DiscountAmount { get; set; }
@@ -207,6 +208,7 @@ namespace SORMS.API.DTOs
         public string? VoucherCode { get; set; }
         public string Description { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public string PaymentMethod { get; set; } = "PayOS";
         public string? CheckoutUrl { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? PaidAt { get; set; }

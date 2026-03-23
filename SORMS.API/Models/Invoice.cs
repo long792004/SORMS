@@ -43,6 +43,9 @@ namespace SORMS.API.Models
         [Required, MaxLength(50)]
         public string Status { get; set; } = "Pending";
 
+        [Required, MaxLength(30)]
+        public string PaymentMethod { get; set; } = "PayOS";
+
         public long? PayOSOrderId { get; set; }
 
         // PayOS Payment Link ID or Checkout URL

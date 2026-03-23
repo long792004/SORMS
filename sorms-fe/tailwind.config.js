@@ -5,36 +5,51 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        heading: ["Poppins", "Inter", "ui-sans-serif", "system-ui", "sans-serif"]
+        sans: ["Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"],
+        heading: ["Sora", "Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"]
       },
       colors: {
-        primary: "#2563EB",
-        secondary: "#06B6D4",
-        accent: "#F59E0B",
-        success: "#10B981",
-        error: "#EF4444",
-        background: "#0F172A",
-        surface: "#FFFFFF",
-        foreground: "#E2E8F0"
+        primary: "#0f766e",
+        secondary: "#1d4ed8",
+        accent: "#f59e0b",
+        success: "#059669",
+        error: "#dc2626",
+        background: "#f4f7f6",
+        surface: "#ffffff",
+        foreground: "#0f172a"
       },
       boxShadow: {
-        glass: "0 20px 50px rgba(15, 23, 42, 0.35)",
-        soft: "0 8px 25px rgba(15, 23, 42, 0.18)"
+        glass: "0 18px 60px rgba(15, 23, 42, 0.14)",
+        soft: "0 8px 28px rgba(2, 12, 27, 0.10)",
+        panel: "0 26px 80px rgba(8, 47, 73, 0.12)"
       },
       borderRadius: {
-        xl: "12px"
+        xl: "14px"
       },
       backgroundImage: {
-        "brand-gradient": "linear-gradient(135deg, #2563EB 0%, #06B6D4 100%)",
-        "radial-lux": "radial-gradient(circle at 5% 5%, rgba(37,99,235,0.25), transparent 35%), radial-gradient(circle at 95% 90%, rgba(6,182,212,0.18), transparent 35%)"
+        "brand-gradient": "linear-gradient(135deg, #0f766e 0%, #1d4ed8 100%)",
+        "radial-lux": "radial-gradient(circle at 4% 4%, rgba(20,184,166,0.22), transparent 34%), radial-gradient(circle at 96% 92%, rgba(29,78,216,0.16), transparent 34%)"
       },
       fontSize: {
-        h1: ["48px", { lineHeight: "1.1", fontWeight: "700" }],
-        h2: ["36px", { lineHeight: "1.2", fontWeight: "700" }],
-        h3: ["28px", { lineHeight: "1.25", fontWeight: "600" }],
+        h1: ["48px", { lineHeight: "1.06", fontWeight: "700" }],
+        h2: ["34px", { lineHeight: "1.15", fontWeight: "700" }],
+        h3: ["26px", { lineHeight: "1.2", fontWeight: "600" }],
         body: ["16px", { lineHeight: "1.6" }],
         small: ["14px", { lineHeight: "1.5" }]
+      },
+      keyframes: {
+        "fade-rise": {
+          "0%": { opacity: "0", transform: "translateY(14px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" }
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "0% 50%" },
+          "100%": { backgroundPosition: "100% 50%" }
+        }
+      },
+      animation: {
+        "fade-rise": "fade-rise 500ms ease-out both",
+        shimmer: "shimmer 8s linear infinite"
       }
     }
   },

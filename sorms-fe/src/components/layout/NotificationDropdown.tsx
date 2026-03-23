@@ -19,7 +19,7 @@ export function NotificationDropdown() {
   return (
     <div className="relative">
       <button
-        className="relative rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-white/10"
+        className="relative rounded-xl border border-slate-200/70 bg-white/80 p-2.5 hover:bg-slate-50"
         onClick={() => setOpen((previous) => !previous)}
       >
         <Bell className="h-4 w-4" />
@@ -31,21 +31,21 @@ export function NotificationDropdown() {
       </button>
 
       {open ? (
-        <div className="glass-card absolute right-0 top-11 z-40 w-[320px] rounded-xl p-3 shadow-xl">
+        <div className="glass-card absolute right-0 top-12 z-40 w-[330px] rounded-2xl p-3 shadow-panel">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold">Notifications</p>
-            <span className="text-xs text-slate-500 dark:text-slate-400">{unreadCount} unread</span>
+            <span className="text-xs text-slate-500">{unreadCount} unread</span>
           </div>
 
           <div className="max-h-72 space-y-2 overflow-auto">
-            {isLoading ? <p className="text-xs text-slate-500 dark:text-slate-400">Loading...</p> : null}
-            {!isLoading && notifications.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No notifications</p> : null}
+            {isLoading ? <p className="text-xs text-slate-500">Loading...</p> : null}
+            {!isLoading && notifications.length === 0 ? <p className="text-xs text-slate-500">No notifications</p> : null}
 
             {notifications.slice(0, 6).map((item: any, index) => (
-              <article key={item.id ?? index} className="rounded-lg border border-slate-200 p-2 text-xs dark:border-white/10">
-                <p className="text-slate-800 dark:text-slate-100">{item.message ?? item.content ?? "Notification"}</p>
+              <article key={item.id ?? index} className="rounded-xl border border-slate-200 bg-white/75 p-2.5 text-xs">
+                <p className="text-slate-800">{item.message ?? item.content ?? "Notification"}</p>
                 <div className="mt-1 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">{item.createdAt ?? item.time ?? ""}</span>
+                  <span className="text-[11px] text-slate-500">{item.createdAt ?? item.time ?? ""}</span>
                   {!item.isRead && item.id ? (
                     <Button variant="ghost" className="px-2 py-1 text-[11px]" onClick={() => markRead.mutate(item.id)}>
                       Mark read

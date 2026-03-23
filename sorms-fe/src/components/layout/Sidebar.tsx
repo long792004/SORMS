@@ -61,9 +61,12 @@ export function Sidebar({ role, className = "", onNavigate }: SidebarProps) {
   const items = getItems(role);
 
   return (
-    <aside className={`glass-card h-[calc(100vh-6rem)] w-64 rounded-xl p-4 ${className}`}>
-      <div className="mb-4 px-2 text-small uppercase tracking-widest text-slate-600 dark:text-slate-400">{role ?? "Admin"} Portal</div>
-      <nav className="space-y-1">
+    <aside className={`glass-card h-[calc(100vh-6.2rem)] w-full max-w-[268px] rounded-2xl p-3 ${className}`}>
+      <div className="mb-4 rounded-xl border border-slate-200/70 bg-white/70 px-3 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Workspace</p>
+        <p className="mt-1 font-heading text-lg font-semibold text-slate-900">{role ?? "Admin"} Portal</p>
+      </div>
+      <nav className="space-y-1.5 overflow-y-auto pr-1">
         {items.map((item) => {
           const isActive = location.pathname === item.to;
 
@@ -72,10 +75,10 @@ export function Sidebar({ role, className = "", onNavigate }: SidebarProps) {
               key={item.to}
               to={item.to}
               onClick={onNavigate}
-              className={`block rounded-lg px-3 py-2 text-sm transition ${
+              className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 isActive
-                  ? "bg-primary/20 text-primary dark:bg-primary/30 dark:text-white"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  ? "bg-brand-gradient text-white shadow-soft"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
               {item.label}

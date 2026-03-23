@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/store/authStore";
 import { useRoleRedirect } from "@/hooks/useRoleRedirect";
 import { UserRole } from "@/types/common";
+import { API_BASE_URL } from "@/utils/constants";
 
 interface LoginResponse {
   Token: string;
@@ -20,7 +21,7 @@ const getApiErrorMessage = (error: any, fallback: string) => {
   if (!error?.response) {
     const message = String(error?.message ?? "");
     if (message.includes("Network Error") || message.includes("ERR_CONNECTION_REFUSED") || message.includes("ERR_NETWORK")) {
-      return "Không thể kết nối tới máy chủ API (http://localhost:5183). Vui lòng chạy backend rồi thử lại.";
+      return `Không thể kết nối tới máy chủ API (${API_BASE_URL}). Vui lòng chạy backend rồi thử lại.`;
     }
   }
 

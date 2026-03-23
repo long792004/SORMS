@@ -195,6 +195,11 @@ namespace SORMS.API.Data
                 .Property(i => i.TotalAmount)
                 .HasColumnType("decimal(18,2)");
 
+            modelBuilder.Entity<Invoice>()
+                .Property(i => i.PaymentMethod)
+                .HasMaxLength(30)
+                .HasDefaultValue("PayOS");
+
             modelBuilder.Entity<Voucher>()
                 .HasIndex(v => v.Code)
                 .IsUnique();

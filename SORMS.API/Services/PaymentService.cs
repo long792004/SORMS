@@ -158,6 +158,7 @@ namespace SORMS.API.Services
                     DiscountAmount = 0,
                     TotalAmount = invoiceDto.Amount,
                     Description = invoiceDto.Description,
+                    PaymentMethod = "PayOS",
                     Status = "Pending",
                     CreatedAt = DateTime.UtcNow
                 };
@@ -305,6 +306,13 @@ namespace SORMS.API.Services
                 if (invoice.Status == "Paid")
                     throw new Exception("Invoice is already paid");
 
+                if (string.Equals(invoice.Status, "AwaitingHotelPayment", StringComparison.OrdinalIgnoreCase))
+                {
+                    invoice.Status = "Pending";
+                }
+
+                invoice.PaymentMethod = "PayOS";
+
                 return await CreatePaymentLinkForInvoiceAsync(
                     invoice,
                     returnUrl,
@@ -387,6 +395,7 @@ namespace SORMS.API.Services
                     Amount = amount,
                     DiscountAmount = 0,
                     TotalAmount = amount,
+                    PaymentMethod = "PayOS",
                     Description = $"Room booking hold for room {room.RoomNumber} ({expectedCheckIn:yyyy-MM-dd} to {expectedCheckOut:yyyy-MM-dd})",
                     Status = "Pending",
                     CreatedAt = now,
@@ -436,6 +445,42 @@ namespace SORMS.API.Services
                     await transaction.DisposeAsync();
                 }
             }
+        }
+
+        public async Task<InvoiceDetailDto> RequestHotelPaymentAsync(int invoiceId, string currentUserId)
+        {
+            if (!int.TryParse(currentUserId, out var userId))
+                throw new UnauthorizedAccessException("Current user is invalid.");
+
+            var resident = await _context.Residents
+                .FirstOrDefaultAsync(r => r.UserId == userId && r.IsActive);
+
+            if (resident == null)
+                throw new UnauthorizedAccessException("Resident profile not found.");
+
+            var invoice = await _context.Invoices
+                .Include(i => i.Resident)
+                .Include(i => i.Room)
+                .Include(i => i.Voucher)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+
+            if (invoice == null)
+                throw new KeyNotFoundException("Invoice not found.");
+
+            if (invoice.ResidentId != resident.Id)
+                throw new UnauthorizedAccessException("You are not allowed to update this invoice.");
+
+            if (string.Equals(invoice.Status, "Paid", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Invoice has already been paid.");
+
+            invoice.PaymentMethod = "PayAtHotel";
+            invoice.Status = "AwaitingHotelPayment";
+            invoice.CheckoutUrl = null;
+            invoice.PayOSOrderId = null;
+
+            await _context.SaveChangesAsync();
+
+            return MapToInvoiceDetailDto(invoice);
         }
 
         private async Task<PaymentResponseDto> CreatePaymentLinkForInvoiceAsync(
@@ -533,6 +578,7 @@ namespace SORMS.API.Services
                     InvoiceId = invoice.Id,
                     PayOSOrderId = invoice.PayOSOrderId ?? 0,
                     Status = invoice.Status,
+                    PaymentMethod = invoice.PaymentMethod,
                     Amount = invoice.TotalAmount,
                     OriginalAmount = invoice.Amount,
                     DiscountAmount = invoice.DiscountAmount,
@@ -1066,6 +1112,7 @@ namespace SORMS.API.Services
                 VoucherCode = invoice.Voucher?.Code,
                 Description = invoice.Description,
                 Status = invoice.Status,
+                PaymentMethod = invoice.PaymentMethod,
                 CheckoutUrl = invoice.CheckoutUrl,
                 CreatedAt = invoice.CreatedAt,
                 PaidAt = invoice.PaidAt,

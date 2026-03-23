@@ -2,29 +2,29 @@ import { createTheme } from "@mui/material/styles";
 
 export const muiTheme = createTheme({
   palette: {
-    mode: "dark",
-    primary: { main: "#2563EB" },
-    secondary: { main: "#06B6D4" },
-    warning: { main: "#F59E0B" },
-    success: { main: "#10B981" },
-    error: { main: "#EF4444" },
+    mode: "light",
+    primary: { main: "#0f766e" },
+    secondary: { main: "#1d4ed8" },
+    warning: { main: "#f59e0b" },
+    success: { main: "#059669" },
+    error: { main: "#dc2626" },
     background: {
-      default: "#0F172A",
-      paper: "rgba(15, 23, 42, 0.72)"
+      default: "#f4f7f6",
+      paper: "#ffffff"
     }
   },
   shape: {
-    borderRadius: 12
+    borderRadius: 14
   },
   typography: {
-    fontFamily: ["Inter", "Poppins", "system-ui", "sans-serif"].join(",")
+    fontFamily: ["Space Grotesk", "Sora", "system-ui", "sans-serif"].join(",")
   },
   components: {
     MuiPaper: {
       styleOverrides: {
         root: {
           backdropFilter: "blur(12px)",
-          border: "1px solid rgba(255,255,255,0.10)"
+          border: "1px solid rgba(148, 163, 184, 0.3)"
         }
       }
     },
