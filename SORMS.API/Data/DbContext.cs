@@ -178,6 +178,15 @@ namespace SORMS.API.Data
                 .HasForeignKey(r => r.RoomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // ==========================
+            // 🔹 CheckInRecord ↔ Reservation (n-1)
+            // ==========================
+            modelBuilder.Entity<CheckInRecord>()
+                .HasOne(c => c.Reservation)
+                .WithMany()
+                .HasForeignKey(c => c.ReservationId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             modelBuilder.Entity<Review>()
                 .Property(r => r.CreatedAt)
                 .HasDefaultValueSql("NOW()");

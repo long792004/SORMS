@@ -23,9 +23,36 @@ namespace SORMS.API.Services
             if (resident == null)
                 throw new Exception("Không tìm thấy thông tin cư dân");
 
+            var room = await _context.Rooms.FirstOrDefaultAsync(r => r.Id == dto.RoomId && r.IsActive);
+            if (room == null)
+                throw new Exception("Phòng không tồn tại.");
+
             var checkInDate = DateTime.SpecifyKind(dto.CheckInDate.Date, DateTimeKind.Utc);
+            if (dto.CheckInTime.HasValue)
+            {
+                checkInDate = checkInDate.Add(dto.CheckInTime.Value);
+            }
+            else
+            {
+                // Mặc định từ Room hoặc 14:00
+                var fromHour = room.CheckInFromHour > 0 ? room.CheckInFromHour : 14;
+                checkInDate = checkInDate.AddHours(fromHour);
+            }
+
             var checkOutDate = DateTime.SpecifyKind(dto.CheckOutDate.Date, DateTimeKind.Utc);
-            var nights = (checkOutDate - checkInDate).Days;
+            if (dto.CheckOutTime.HasValue)
+            {
+                checkOutDate = checkOutDate.Add(dto.CheckOutTime.Value);
+            }
+            else
+            {
+                // Mặc định từ Room hoặc 12:00
+                var byHour = room.CheckOutByHour > 0 ? room.CheckOutByHour : 12;
+                checkOutDate = checkOutDate.AddHours(byHour);
+            }
+
+            var nights = (checkOutDate.Date - checkInDate.Date).Days;
+            if (nights <= 0) nights = 1; // Tối thiểu 1 đêm
 
             if (checkOutDate <= checkInDate)
                 throw new Exception("Check-out phải lớn hơn Check-in.");
@@ -35,10 +62,6 @@ namespace SORMS.API.Services
 
             if (dto.NumberOfGuests != dto.Guests.Count)
                 throw new Exception("Số lượng khách không khớp với danh sách khách ở.");
-
-            var room = await _context.Rooms.FirstOrDefaultAsync(r => r.Id == dto.RoomId && r.IsActive);
-            if (room == null)
-                throw new Exception("Phòng không tồn tại.");
 
             var maxCapacity = room.MaxCapacity > 0 ? room.MaxCapacity : 1;
             if (dto.NumberOfGuests > maxCapacity)

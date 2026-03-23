@@ -31,6 +31,7 @@ namespace SORMS.API.Services
                     await CleanupExpiredHoldsAsync(stoppingToken);
                     await AutoCheckOutExpiredStaysAsync(stoppingToken);
                     await AutoReleaseMaintenanceRoomsAsync(stoppingToken);
+                    await SendCheckInRemindersAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -205,6 +206,67 @@ namespace SORMS.API.Services
             if (releasedCount > 0)
             {
                 _logger.LogInformation("Auto-released {Count} room(s) from maintenance.", releasedCount);
+            }
+        }
+
+        private async Task SendCheckInRemindersAsync(CancellationToken cancellationToken)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SormsDbContext>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var now = DateTime.UtcNow;
+
+            var in24h = now.AddHours(24);
+            var in2h = now.AddHours(2);
+
+            var upcomingReservations = await dbContext.Reservations
+                .Include(r => r.Room)
+                .Where(r => r.Status == "Confirmed" 
+                         && r.CheckInDate > now
+                         && (!r.Reminder24hSent || !r.Reminder2hSent))
+                .ToListAsync(cancellationToken);
+
+            int sentCount = 0;
+            foreach (var res in upcomingReservations)
+            {
+                try
+                {
+                    if (!res.Reminder2hSent && res.CheckInDate <= in2h)
+                    {
+                        res.Reminder2hSent = true;
+                        res.Reminder24hSent = true; // In case 24h passed
+                        await notificationService.CreateNotificationAsync(new NotificationDto
+                        {
+                            ResidentId = res.ResidentId,
+                            Message = $"⏰ Nhắc nhở: Chỉ còn chưa tới 2 giờ nữa là tới giờ check-in phòng {res.Room?.RoomNumber}. Bạn đã sẵn sàng chưa?",
+                            CreatedAt = now,
+                            IsRead = false
+                        });
+                        sentCount++;
+                    }
+                    else if (!res.Reminder24hSent && res.CheckInDate <= in24h && res.CheckInDate > in2h)
+                    {
+                        res.Reminder24hSent = true;
+                        await notificationService.CreateNotificationAsync(new NotificationDto
+                        {
+                            ResidentId = res.ResidentId,
+                            Message = $"⏰ Nhắc nhở: Ngày mai {res.CheckInDate:dd/MM/yyyy HH:mm} bạn có lịch check-in phòng {res.Room?.RoomNumber}.",
+                            CreatedAt = now,
+                            IsRead = false
+                        });
+                        sentCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send check-in reminder for reservation {ResId}", res.Id);
+                }
+            }
+
+            if (sentCount > 0)
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("Sent {Count} check-in reminder(s).", sentCount);
             }
         }
     }

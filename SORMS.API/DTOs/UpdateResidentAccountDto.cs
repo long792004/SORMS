@@ -8,7 +8,6 @@ namespace SORMS.API.DTOs
         [EmailAddress(ErrorMessage = "Email không hợp lệ")]
         public string Email { get; set; } = string.Empty;
 
-        [Phone(ErrorMessage = "Số điện thoại không hợp lệ")]
         public string? Phone { get; set; }
     }
 }

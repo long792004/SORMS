@@ -217,8 +217,6 @@ export function HomePage() {
               reviewCount={getReviewCount(room)}
               location={room.location ?? "SORM Residence"}
               imageUrl={getRoomImageUrls(room)[0]}
-              status={room.status ?? "Available"}
-              holdExpiresAt={room.maintenanceEndDate || room.holdExpiresAt}
               onView={() => navigate(`/rooms/${getRoomId(room)}`)}
               onBook={() => handleBookFromCard(room)}
             />
@@ -352,8 +350,20 @@ export function RoomListPage() {
           <label className="text-xs text-slate-500 dark:text-slate-400">Check-out date (optional)</label>
           <input type="date" value={filterCheckOut} onChange={(event) => { setFilterCheckOut(event.target.value); setPage(1); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5" />
         </div>
-        {hasDateFilter ? <p className="text-xs text-emerald-400">Showing available rooms for selected dates.</p> : <p className="text-xs text-slate-500 dark:text-slate-400">Select dates to filter available rooms.</p>}
-        {filterCheckIn && filterCheckOut && filterCheckOut <= filterCheckIn ? <p className="text-xs text-rose-400">Check-out must be after check-in.</p> : null}
+        {!hasDateFilter ? (
+          <div className="rounded-xl border border-blue-400/30 bg-gradient-to-br from-blue-500/10 to-indigo-500/5 p-4 text-center">
+            <p className="text-xl">📅</p>
+            <p className="mt-2 text-sm font-semibold text-blue-100">Tìm phòng trống</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-blue-300/80">Nhập ngày nhận và trả phòng để chúng tôi hiển thị những lựa chọn tuyệt vời nhất dành cho bạn.</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-center">
+            <p className="text-xs font-medium text-emerald-400">✨ Đang hiển thị phòng trống theo lịch của bạn</p>
+          </div>
+        )}
+        {filterCheckIn && filterCheckOut && filterCheckOut <= filterCheckIn ? (
+          <p className="rounded-lg bg-rose-500/10 p-2 text-center text-[11px] text-rose-400 border border-rose-500/20">⚠️ Ngày trả phòng phải sau ngày nhận phòng.</p>
+        ) : null}
         <label className="text-sm text-slate-600 dark:text-slate-300">Price up to: {maxPrice.toLocaleString("vi-VN")} VND</label>
         <input type="range" min={1000000} max={10000000} step={100000} value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} className="w-full" />
         <label className="text-sm text-slate-600 dark:text-slate-300">Guests</label>
@@ -385,8 +395,6 @@ export function RoomListPage() {
               reviewCount={getReviewCount(room)}
               location={`${getLocationText(room)}${getDistanceLabel(room) ? ` • ${getDistanceLabel(room)}` : ""}`}
               imageUrl={getRoomImageUrls(room)[0]}
-              status={room.status ?? "Available"}
-              holdExpiresAt={room.maintenanceEndDate || room.holdExpiresAt}
               onView={() => navigate(`/rooms/${getRoomId(room)}`)}
               onBook={() => handleBookFromCard(room)}
             />
@@ -412,6 +420,14 @@ export function RoomDetailPage() {
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
+  const [checkInTime, setCheckInTime] = useState("");
+  const [checkOutTime, setCheckOutTime] = useState("");
+
+  // Quy định giờ của phòng (mặc định 14:00 / 12:00 nếu backend chưa trả về)
+  const roomCheckInFromHour: number = room?.checkInFromHour ?? 14;
+  const roomCheckOutByHour: number = room?.checkOutByHour ?? 12;
+  const defaultCheckInTime = `${String(roomCheckInFromHour).padStart(2, "0")}:00`;
+  const defaultCheckOutTime = `${String(roomCheckOutByHour).padStart(2, "0")}:00`;
 
   useEffect(() => {
     if (prefillCheckIn) setCheckIn(prefillCheckIn);
@@ -419,7 +435,20 @@ export function RoomDetailPage() {
     if (Number.isFinite(prefillGuests) && prefillGuests > 0) setGuests(prefillGuests);
   }, [prefillCheckIn, prefillCheckOut, prefillGuests]);
 
+  // Set default time khi đã load room data
+  useEffect(() => {
+    if (!checkInTime) setCheckInTime(defaultCheckInTime);
+    if (!checkOutTime) setCheckOutTime(defaultCheckOutTime);
+  }, [roomCheckInFromHour, roomCheckOutByHour]);
+
   const isDateRangeValid = Boolean(checkIn && checkOut && checkOut > checkIn);
+
+  // Validate giờ check-in/out theo quy định phòng
+  const checkInHour = checkInTime ? parseInt(checkInTime.split(":")[0]) : roomCheckInFromHour;
+  const checkOutHour = checkOutTime ? parseInt(checkOutTime.split(":")[0]) : roomCheckOutByHour;
+  const isCheckInTimeValid = checkInHour >= roomCheckInFromHour;
+  const isCheckOutTimeValid = checkOutHour <= roomCheckOutByHour;
+  const isTimeValid = isCheckInTimeValid && isCheckOutTimeValid;
 
   const { data: availableRoomsData, isFetching: checkingAvailability } = useQuery({
     queryKey: ["room-detail", "availability", id, checkIn, checkOut],
@@ -459,8 +488,8 @@ export function RoomDetailPage() {
     refund: "Hoàn tiền trong 5-7 ngày làm việc theo điều kiện booking.",
     houseRules: "Không hút thuốc trong phòng, giữ yên tĩnh sau 22:00."
   };
-  const canProceedBooking = isDateRangeValid && isCurrentRoomAvailable;
-  const bookingTarget = `/checkout?roomId=${id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}&roomPrice=${roomPrice}&roomNumber=${encodeURIComponent(String(room?.roomNumber ?? id))}`;
+  const canProceedBooking = isDateRangeValid && isCurrentRoomAvailable && isTimeValid;
+  const bookingTarget = `/checkout?roomId=${id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}&roomPrice=${roomPrice}&roomNumber=${encodeURIComponent(String(room?.roomNumber ?? id))}&checkInTime=${encodeURIComponent(checkInTime)}&checkOutTime=${encodeURIComponent(checkOutTime)}`;
   const alternativeRooms = isDateRangeValid
     ? availableRooms
         .filter((item: any) => String(item.id ?? item.roomId ?? item.roomNumber) !== String(id))
@@ -529,22 +558,86 @@ export function RoomDetailPage() {
       </div>
 
       <aside className="glass-card h-fit rounded-xl p-5">
-        <h3 className="text-lg font-semibold">Booking Panel</h3>
+        <h3 className="text-h3 font-heading">Booking Panel</h3>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-blue-400/20 bg-blue-500/5 p-3 text-center">
+            <p className="text-[10px] uppercase tracking-wider text-blue-400/80">Check-in from</p>
+            <p className="mt-1 text-lg font-bold text-blue-200">{String(roomCheckInFromHour).padStart(2, "0")}:00</p>
+          </div>
+          <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/5 p-3 text-center">
+            <p className="text-[10px] uppercase tracking-wider text-indigo-400/80">Check-out by</p>
+            <p className="mt-1 text-lg font-bold text-indigo-200">{String(roomCheckOutByHour).padStart(2, "0")}:00</p>
+          </div>
+        </div>
+
         <div className="mt-3 space-y-2">
-          <input type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input type="number" min={1} value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          {/* Ngày check-in */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500 dark:text-slate-400">Ngày check-in</label>
+            <input type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+
+          {/* Giờ check-in */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500 dark:text-slate-400">Giờ check-in (từ {String(roomCheckInFromHour).padStart(2, "0")}:00)</label>
+            <input
+              type="time"
+              value={checkInTime}
+              min={defaultCheckInTime}
+              onChange={(event) => setCheckInTime(event.target.value)}
+              className={`h-10 w-full rounded-xl border px-3 bg-white dark:bg-white/5 ${!isCheckInTimeValid && checkInTime ? "border-rose-400 text-rose-400" : "border-slate-200 dark:border-white/10"}`}
+            />
+            {!isCheckInTimeValid && checkInTime && (
+              <p className="text-[11px] text-rose-400">Phải từ {String(roomCheckInFromHour).padStart(2, "0")}:00 trở đi</p>
+            )}
+          </div>
+
+          {/* Ngày check-out */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500 dark:text-slate-400">Ngày check-out</label>
+            <input type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          </div>
+
+          {/* Giờ check-out */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500 dark:text-slate-400">Giờ check-out (trước {String(roomCheckOutByHour).padStart(2, "0")}:00)</label>
+            <input
+              type="time"
+              value={checkOutTime}
+              max={defaultCheckOutTime}
+              onChange={(event) => setCheckOutTime(event.target.value)}
+              className={`h-10 w-full rounded-xl border px-3 bg-white dark:bg-white/5 ${!isCheckOutTimeValid && checkOutTime ? "border-rose-400 text-rose-400" : "border-slate-200 dark:border-white/10"}`}
+            />
+            {!isCheckOutTimeValid && checkOutTime && (
+              <p className="text-[11px] text-rose-400">Phải trước {String(roomCheckOutByHour).padStart(2, "0")}:00</p>
+            )}
+          </div>
+
+          {/* Số khách */}
+          <div className="space-y-1">
+            <label className="text-xs text-slate-500 dark:text-slate-400">Số khách (tối đa {getRoomCapacity(room)})</label>
+            <input
+              type="number"
+              min={1}
+              max={getRoomCapacity(room)}
+              value={guests}
+              onChange={(event) => setGuests(Math.min(getRoomCapacity(room), Math.max(1, Number(event.target.value))))}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5"
+            />
+          </div>
+
           <p className={`text-xs ${canProceedBooking ? "text-emerald-300" : "text-amber-300"}`}>{bookingStatusText}</p>
+          {!isTimeValid && isDateRangeValid && (
+            <p className="text-xs text-rose-400">⚠️ Vui lòng chọn giờ check-in/out phù hợp với quy định phòng.</p>
+          )}
           <p className="text-xs text-slate-500 dark:text-slate-400">Giá phòng: {roomPrice.toLocaleString("vi-VN")} VND/tháng</p>
-          <Tooltip
-            title={!isAuthenticated ? "Please log in to book this room" : ""}
-            arrow
-            placement="top"
-          >
+
+          <Tooltip title={!isAuthenticated ? "Please log in to book this room" : ""} arrow placement="top">
             <span>
               <Button
                 className="w-full"
-                disabled={isAuthenticated ? !canProceedBooking : false}
+                disabled={isAuthenticated ? (!canProceedBooking || !isTimeValid) : false}
                 onClick={() => {
                   if (!isAuthenticated) {
                     navigate("/login", { state: { from: bookingTarget } });
@@ -747,8 +840,6 @@ export function SearchResultsPage() {
             reviewCount={getReviewCount(room)}
             location={`${getLocationText(room)}${getDistanceLabel(room) ? ` • ${getDistanceLabel(room)}` : ""}`}
             imageUrl={getRoomImageUrls(room)[0]}
-            status={room.status ?? "Available"}
-            holdExpiresAt={room.holdExpiresAt}
             onView={() => navigate(`/rooms/${getRoomId(room)}`)}
             onBook={() => handleBookFromCard(room)}
           />

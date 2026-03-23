@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -12,13 +12,13 @@ namespace SORMS.API.Models
         public int Id { get; set; }
 
         [Required, MaxLength(100)]
-        public string FullName { get; set; }
+        public string FullName { get; set; } = default!;
 
         [Required, MaxLength(150), EmailAddress]
-        public string Email { get; set; }
+        public string Email { get; set; } = default!;
 
-        [MaxLength(20), Phone]
-        public string Phone { get; set; }
+        [Required, MaxLength(20), Phone]
+        public string Phone { get; set; } = default!;
 
         [MaxLength(20)]
         public string? IdentityNumber { get; set; }

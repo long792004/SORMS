@@ -10,6 +10,7 @@ import { serviceRequestApi } from "@/api/serviceRequestApi";
 import { paymentApi } from "@/api/paymentApi";
 import { reportApi } from "@/api/reportApi";
 import { notificationApi } from "@/api/notificationApi";
+import { roomInspectionApi } from "@/api/roomInspectionApi";
 import { getRoomImageUrls, resolveMediaUrl } from "@/utils/media";
 
 const listOf = (value: unknown): any[] => (Array.isArray(value) ? value : []);
@@ -116,6 +117,35 @@ export function StaffCheckInOutPage() {
     mutationFn: (requestId: number) => checkInApi.approveCheckOut({ requestId, isApproved: false, rejectReason }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] })
   });
+  
+  const [inspectingId, setInspectingId] = useState<number | null>(null);
+  const [inspectionForm, setInspectionForm] = useState({
+    furnitureStatus: "OK",
+    equipmentStatus: "OK",
+    roomConditionStatus: "OK",
+    result: "OK",
+    additionalFee: 0,
+    notes: ""
+  });
+
+  const submitInspectionAndCheckout = useMutation({
+    mutationFn: async (requestId: number) => {
+      await roomInspectionApi.create({
+        checkInRecordId: requestId,
+        ...inspectionForm
+      });
+      await checkInApi.approveCheckOut({ requestId, isApproved: true, rejectReason: null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] });
+      setInspectingId(null);
+    }
+  });
+
+  const verifyIdentity = useMutation({
+    mutationFn: (args: {residentId: number, isVerified: boolean}) => residentApi.verifyIdentity(args),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] })
+  });
 
   return (
     <section className="page-shell space-y-5">
@@ -138,13 +168,67 @@ export function StaffCheckInOutPage() {
                 <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
                 <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
                 <p className="muted-text">{String(item.expectedCheckInDate ?? "").slice(0, 10)} → {String(item.expectedCheckOutDate ?? "").slice(0, 10)}</p>
-                <p className={`mt-1 ${paid ? "text-emerald-400" : "text-amber-400"}`}>Invoice: {invoice ? `#${invoice.id} - ${invoice.status}` : "Chưa tìm thấy invoice"}</p>
-                <p className={`mt-1 ${holdState === "Active" ? "text-amber-300" : holdState === "Expired" ? "text-rose-300" : "text-slate-400"}`}>
+                
+                {/* Parse GuestList JSON để hiển thị danh sách khách hàng */}
+                {(() => {
+                  try {
+                    const guestsArr = JSON.parse(item.guestList);
+                    if (Array.isArray(guestsArr) && guestsArr.length > 0) {
+                      return (
+                        <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-white/5">
+                          <p className="text-xs font-semibold">Danh sách khách ({guestsArr.length}):</p>
+                          <ul className="mt-1 list-inside list-disc text-xs text-slate-500 dark:text-slate-400">
+                            {guestsArr.map((g: any, i: number) => (
+                              <li key={i}>
+                                <span className={i === 0 ? "font-medium text-slate-700 dark:text-slate-300" : ""}>
+                                  {g.fullName || "(Chưa nhập tên)"}
+                                </span>
+                                {g.phone && ` - ${g.phone}`}
+                                {g.identityNumber && ` - ID: ${g.identityNumber}`}
+                                {i === 0 ? " (Người đặt chính)" : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    }
+                  } catch (e) {
+                    // Fallback nếu không phải JSON
+                    if (item.guestList) return <p className="mt-1 text-xs text-slate-500">Guests: {item.guestList}</p>;
+                  }
+                  return <p className="mt-1 text-xs text-slate-500">Booker Info: {item.bookerPhone ? `${item.bookerPhone}` : ""} {item.bookerIdentityNumber ? ` - ID: ${item.bookerIdentityNumber}` : ""}</p>;
+                })()}
+
+                {item.identityDocumentUrl ? (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Giấy tờ tùy thân</p>
+                    <img src={item.identityDocumentUrl} alt="CCCD" className="mt-2 h-40 w-auto rounded-lg object-contain border border-slate-200 dark:border-white/10" />
+                    <div className="mt-3 flex items-center justify-between">
+                      {item.identityVerified ? (
+                        <p className="text-sm font-medium text-emerald-500">✔️ Đã xác minh hợp lệ</p>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button onClick={() => verifyIdentity.mutate({ residentId: item.residentId, isVerified: true })} disabled={verifyIdentity.isPending}>
+                            Duyệt CCCD
+                          </Button>
+                          <Button variant="ghost" className="text-rose-500" onClick={() => verifyIdentity.mutate({ residentId: item.residentId, isVerified: false })} disabled={verifyIdentity.isPending}>
+                            Từ chối tài liệu
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 rounded-lg bg-amber-500/10 p-2 text-sm text-amber-600 dark:text-amber-400">⚠️ Resident chưa tải lên giấy tờ tuỳ thân.</p>
+                )}
+
+                <p className={`mt-3 ${paid ? "text-emerald-500 font-medium" : "text-amber-500 font-medium"}`}>Invoice: {invoice ? `#${invoice.id} - ${invoice.status}` : "Chưa tìm thấy invoice"}</p>
+                <p className={`mt-1 text-sm ${holdState === "Active" ? "text-amber-500" : holdState === "Expired" ? "text-rose-500" : "text-slate-500"}`}>
                   Hold: {holdState} • Expires: {formatDateTime(holdExpiresAt)}
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button variant="ghost" onClick={() => approveCheckIn.mutate(item.id)} disabled={!paid || approveCheckIn.isPending}>Approve Check-in</Button>
-                  <Button variant="ghost" onClick={() => rejectCheckIn.mutate(item.id)} disabled={rejectCheckIn.isPending}>Reject</Button>
+                <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-slate-200 dark:border-white/10">
+                  <Button onClick={() => approveCheckIn.mutate(item.id)} disabled={!paid || !item.identityVerified || approveCheckIn.isPending}>Approve Check-in</Button>
+                  <Button variant="ghost" className="text-rose-500" onClick={() => rejectCheckIn.mutate(item.id)} disabled={rejectCheckIn.isPending}>Reject</Button>
                 </div>
               </article>
             );
@@ -161,10 +245,44 @@ export function StaffCheckInOutPage() {
             <article key={item.id ?? index} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
               <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
               <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button variant="ghost" onClick={() => approveCheckOut.mutate(item.id)} disabled={approveCheckOut.isPending}>Approve Check-out</Button>
-                <Button variant="ghost" onClick={() => rejectCheckOut.mutate(item.id)} disabled={rejectCheckOut.isPending}>Reject</Button>
-              </div>
+              
+              {inspectingId === item.id ? (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5 space-y-3">
+                  <p className="font-semibold text-sm">Biên bản Kiểm tra phòng</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <select value={inspectionForm.furnitureStatus} onChange={e => setInspectionForm({...inspectionForm, furnitureStatus: e.target.value})} className="h-9 rounded-lg border border-slate-200 bg-white px-2 dark:border-white/10 dark:bg-slate-900">
+                      <option value="OK">Nội thất: OK</option>
+                      <option value="Damaged">Nội thất: Hư hỏng</option>
+                    </select>
+                    <select value={inspectionForm.equipmentStatus} onChange={e => setInspectionForm({...inspectionForm, equipmentStatus: e.target.value})} className="h-9 rounded-lg border border-slate-200 bg-white px-2 dark:border-white/10 dark:bg-slate-900">
+                      <option value="OK">Thiết bị: OK</option>
+                      <option value="Damaged">Thiết bị: Hư hỏng</option>
+                    </select>
+                    <select value={inspectionForm.roomConditionStatus} onChange={e => setInspectionForm({...inspectionForm, roomConditionStatus: e.target.value})} className="h-9 rounded-lg border border-slate-200 bg-white px-2 dark:border-white/10 dark:bg-slate-900">
+                      <option value="OK">Vệ sinh: Tốt</option>
+                      <option value="Dirty">Vệ sinh: Dơ</option>
+                    </select>
+                    <select value={inspectionForm.result} onChange={e => setInspectionForm({...inspectionForm, result: e.target.value})} className="h-9 rounded-lg border border-slate-200 bg-white px-2 dark:border-white/10 dark:bg-slate-900">
+                      <option value="OK">Kết luận: Đạt</option>
+                      <option value="NeedRepair">Kết luận: Cần sửa chữa</option>
+                    </select>
+                    <input type="number" placeholder="Phí phụ thu (VNĐ)" value={inspectionForm.additionalFee} onChange={e => setInspectionForm({...inspectionForm, additionalFee: Number(e.target.value)})} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 dark:border-white/10 dark:bg-slate-900" />
+                    <input type="text" placeholder="Ghi chú thêm..." value={inspectionForm.notes} onChange={e => setInspectionForm({...inspectionForm, notes: e.target.value})} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 dark:border-white/10 dark:bg-slate-900 col-span-2" />
+                  </div>
+                  <div className="flex gap-2 mt-2 pt-2 border-t border-slate-200 dark:border-white/10">
+                    <Button onClick={() => submitInspectionAndCheckout.mutate(item.id)} disabled={submitInspectionAndCheckout.isPending}>Hoàn tất Check-out</Button>
+                    <Button variant="ghost" className="text-slate-500" onClick={() => setInspectingId(null)}>Hủy</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2 pt-2">
+                  <Button variant="ghost" onClick={() => {
+                    setInspectingId(item.id);
+                    setInspectionForm({ furnitureStatus: "OK", equipmentStatus: "OK", roomConditionStatus: "OK", result: "OK", additionalFee: 0, notes: "" });
+                  }}>Sửa biên bản kiểm tra & Check-out</Button>
+                  <Button variant="ghost" className="text-rose-500" onClick={() => rejectCheckOut.mutate(item.id)} disabled={rejectCheckOut.isPending}>Từ chối check-out</Button>
+                </div>
+              )}
             </article>
           ))}
         </div>

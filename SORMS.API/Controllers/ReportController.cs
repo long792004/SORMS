@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SORMS.API.DTOs;
 using SORMS.API.Interfaces;
@@ -35,7 +35,7 @@ namespace SORMS.API.Controllers
                 return BadRequest(new { message = "Không thể xác định thông tin người dùng" });
             }
             
-            var report = await _reportService.CreateReportAsync(dto, username, int.Parse(userId));
+            var report = await _reportService.CreateReportAsync(dto, username!, int.Parse(userId!));
             return Ok(report);
         }
 
@@ -59,7 +59,7 @@ namespace SORMS.API.Controllers
             else
             {
                 // Staff chỉ xem báo cáo của mình
-                reports = await _reportService.GetReportsByStaffIdAsync(int.Parse(userId));
+                reports = await _reportService.GetReportsByStaffIdAsync(int.Parse(userId!));
             }
 
             return Ok(reports);
@@ -80,7 +80,7 @@ namespace SORMS.API.Controllers
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (userRole == "Staff" && report.StaffId != int.Parse(userId))
+            if (userRole == "Staff" && report.StaffId != int.Parse(userId!))
             {
                 return Forbid();
             }
@@ -96,7 +96,7 @@ namespace SORMS.API.Controllers
         public async Task<IActionResult> UpdateReport(int id, [FromBody] UpdateReportDto dto)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var success = await _reportService.UpdateReportAsync(id, dto, int.Parse(userId));
+            var success = await _reportService.UpdateReportAsync(id, dto, int.Parse(userId!));
 
             if (!success)
                 return BadRequest(new { message = "Không thể cập nhật báo cáo. Có thể báo cáo không tồn tại hoặc bạn không có quyền." });
@@ -112,7 +112,7 @@ namespace SORMS.API.Controllers
         public async Task<IActionResult> DeleteReport(int id)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var success = await _reportService.DeleteReportAsync(id, int.Parse(userId));
+            var success = await _reportService.DeleteReportAsync(id, int.Parse(userId!));
 
             if (!success)
                 return BadRequest(new { message = "Không thể xóa báo cáo. Có thể báo cáo không tồn tại hoặc bạn không có quyền." });

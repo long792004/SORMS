@@ -2,7 +2,7 @@ namespace SORMS.API.DTOs
 {
     public class CreatePaymentLinkDto
     {
-        public int InvoiceId { get; set; }
+        public int? InvoiceId { get; set; }
         public string? ReturnUrl { get; set; }
         public string? CancelUrl { get; set; }
     }

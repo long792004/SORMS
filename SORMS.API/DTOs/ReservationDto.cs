@@ -58,6 +58,12 @@ namespace SORMS.API.DTOs
 
         [Required]
         public List<CreateReservationGuestDto> Guests { get; set; } = new();
+
+        // Giờ check-in mong muốn (phải >= Room.CheckInFromHour)
+        public TimeSpan? CheckInTime { get; set; }
+
+        // Giờ check-out mong muốn (phải <= Room.CheckOutByHour)
+        public TimeSpan? CheckOutTime { get; set; }
     }
 
     public class ConfirmReservationPaymentDto

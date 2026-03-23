@@ -95,6 +95,9 @@ namespace SORMS.API.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int?>("ReservationId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("ResidentId")
                         .HasColumnType("integer");
 
@@ -111,6 +114,8 @@ namespace SORMS.API.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ReservationId");
 
                     b.HasIndex("ResidentId");
 
@@ -364,6 +369,12 @@ namespace SORMS.API.Migrations
 
                     b.Property<int>("NumberOfGuests")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("Reminder24hSent")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Reminder2hSent")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("ResidentId")
                         .HasColumnType("integer");
@@ -623,6 +634,12 @@ namespace SORMS.API.Migrations
 
                     b.Property<decimal>("Area")
                         .HasColumnType("numeric(10,2)");
+
+                    b.Property<int>("CheckInFromHour")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CheckOutByHour")
+                        .HasColumnType("integer");
 
                     b.Property<string>("CurrentResident")
                         .HasColumnType("text");
@@ -1002,6 +1019,11 @@ namespace SORMS.API.Migrations
 
             modelBuilder.Entity("SORMS.API.Models.CheckInRecord", b =>
                 {
+                    b.HasOne("SORMS.API.Models.Reservation", "Reservation")
+                        .WithMany()
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SORMS.API.Models.Resident", "Resident")
                         .WithMany("CheckInRecords")
                         .HasForeignKey("ResidentId")
@@ -1013,6 +1035,8 @@ namespace SORMS.API.Migrations
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Reservation");
 
                     b.Navigation("Resident");
 

@@ -44,6 +44,10 @@ namespace SORMS.API.Models
         [MaxLength(500)]
         public string? CancelReason { get; set; }
 
+        public bool Reminder24hSent { get; set; } = false;
+        
+        public bool Reminder2hSent { get; set; } = false;
+
         public int? InvoiceId { get; set; }
 
         [ForeignKey(nameof(InvoiceId))]

@@ -1,4 +1,4 @@
-﻿namespace SORMS.API.DTOs
+namespace SORMS.API.DTOs
 {
     public class ResidentDto
     {
@@ -11,6 +11,8 @@
         public string Phone { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty; // Alias for Phone
         public string IdentityNumber { get; set; } = string.Empty;
+        public string? IdentityDocumentUrl { get; set; }
+        public bool IdentityVerified { get; set; } = false;
         public string? Role { get; set; } // Lecturer, Staff, Guest (không bắt buộc)
         public int? RoomId { get; set; } // Nullable - có thể chưa được assign phòng
         public string? RoomNumber { get; set; }

@@ -14,7 +14,7 @@ namespace SORMS.API.Models
         public int ResidentId { get; set; }
 
         [ForeignKey(nameof(ResidentId))]
-        public Resident Resident { get; set; }
+        public Resident Resident { get; set; } = default!;
 
         public int? RoomId { get; set; }
 
@@ -37,7 +37,7 @@ namespace SORMS.API.Models
         public decimal TotalAmount { get; set; }
 
         [Required, MaxLength(255)]
-        public string Description { get; set; }
+        public string Description { get; set; } = default!;
 
         // Pending, Paid, Completed, Cancelled
         [Required, MaxLength(50)]

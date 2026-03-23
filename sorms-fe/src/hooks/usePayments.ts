@@ -37,10 +37,10 @@ export function useApplyVoucher() {
 
 export function useCreatePaymentLink() {
   return useMutation({
-    mutationFn: ({ invoiceId }: { invoiceId: string }) =>
+    mutationFn: ({ invoiceId, returnUrl, cancelUrl }: { invoiceId: string; returnUrl?: string; cancelUrl?: string }) =>
       paymentApi.createPaymentLink(invoiceId, {
-        returnUrl: `${window.location.origin}/resident/invoices?success=true`,
-        cancelUrl: `${window.location.origin}/resident/invoices?cancel=true`
+        returnUrl: returnUrl ?? `${window.location.origin}/resident/invoices?success=true`,
+        cancelUrl: cancelUrl ?? `${window.location.origin}/resident/invoices?cancel=true`
       })
   });
 }

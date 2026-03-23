@@ -1,4 +1,4 @@
-﻿using SORMS.API.DTOs;
+using SORMS.API.DTOs;
 
 public interface IResidentService
 {
@@ -13,7 +13,7 @@ public interface IResidentService
     Task<bool> CheckOutAsync(int residentId, DateTime checkOutDate);
 
     Task<bool> UpdateResidentAccountAsync(int userId, string email, string phone);
-    Task<bool> UpdateResidentProfileAsync(int userId, string? address, string? emergencyContact, string? notes);
+    Task<bool> UpdateResidentProfileAsync(int userId, string? address, string? emergencyContact, string? notes, string? identityDocumentUrl);
     Task<ResidentDto> GetResidentByUserIdAsync(int userId);
     Task<bool> VerifyIdentityAsync(int residentId, int verifiedByUserId, bool isVerified, string? identityDocumentUrl);
 }
