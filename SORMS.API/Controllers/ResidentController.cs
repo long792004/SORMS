@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SORMS.API.DTOs;
 using SORMS.API.Interfaces;
+using System.Net.Mail;
 using System.Security.Claims;
 
 namespace SORMS.API.Controllers
@@ -97,6 +98,31 @@ namespace SORMS.API.Controllers
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+
+            var missingFields = new List<string>();
+            if (string.IsNullOrWhiteSpace(residentDto.UserName)) missingFields.Add("UserName");
+            if (string.IsNullOrWhiteSpace(residentDto.Password)) missingFields.Add("Password");
+            if (string.IsNullOrWhiteSpace(residentDto.FullName)) missingFields.Add("FullName");
+            if (string.IsNullOrWhiteSpace(residentDto.Email)) missingFields.Add("Email");
+            if (string.IsNullOrWhiteSpace(residentDto.Phone) && string.IsNullOrWhiteSpace(residentDto.PhoneNumber)) missingFields.Add("PhoneNumber");
+            if (string.IsNullOrWhiteSpace(residentDto.IdentityNumber)) missingFields.Add("IdentityNumber");
+            if (string.IsNullOrWhiteSpace(residentDto.Gender)) missingFields.Add("Gender");
+            if (!residentDto.DateOfBirth.HasValue) missingFields.Add("DateOfBirth");
+
+            if (missingFields.Count > 0)
+                return BadRequest(new { message = $"Thiếu trường bắt buộc: {string.Join(", ", missingFields)}." });
+
+            if (residentDto.RoomId.HasValue && residentDto.RoomId.Value <= 0)
+                return BadRequest(new { message = "RoomId phải lớn hơn 0." });
+
+            try
+            {
+                _ = new MailAddress(residentDto.Email);
+            }
+            catch
+            {
+                return BadRequest(new { message = "Email không đúng định dạng." });
+            }
 
             var created = await _residentService.CreateResidentAsync(residentDto);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);

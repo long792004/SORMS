@@ -289,23 +289,53 @@ export function StaffResidentsPage() {
     gender: "",
     dateOfBirth: ""
   });
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const trimmedCreateForm = {
+    userName: createForm.userName.trim(),
+    password: createForm.password.trim(),
+    fullName: createForm.fullName.trim(),
+    email: createForm.email.trim(),
+    phoneNumber: createForm.phoneNumber.trim(),
+    identityNumber: createForm.identityNumber.trim(),
+    roomId: createForm.roomId.trim(),
+    address: createForm.address.trim(),
+    emergencyContact: createForm.emergencyContact.trim(),
+    gender: createForm.gender.trim(),
+    dateOfBirth: createForm.dateOfBirth.trim()
+  };
+
+  const missingRequiredFields: string[] = [];
+  if (!trimmedCreateForm.userName) missingRequiredFields.push("Username");
+  if (!trimmedCreateForm.password) missingRequiredFields.push("Password");
+  if (!trimmedCreateForm.fullName) missingRequiredFields.push("Full name");
+  if (!trimmedCreateForm.email) missingRequiredFields.push("Email");
+  if (!trimmedCreateForm.phoneNumber) missingRequiredFields.push("Phone");
+  if (!trimmedCreateForm.identityNumber) missingRequiredFields.push("CCCD");
+  if (!trimmedCreateForm.gender) missingRequiredFields.push("Gender");
+  if (!trimmedCreateForm.dateOfBirth) missingRequiredFields.push("Date of birth");
+
+  const hasInvalidRoomId =
+    Boolean(trimmedCreateForm.roomId) &&
+    (!Number.isInteger(Number(trimmedCreateForm.roomId)) || Number(trimmedCreateForm.roomId) <= 0);
 
   const createResident = useMutation({
     mutationFn: () => residentApi.createResident({
-      userName: createForm.userName,
-      password: createForm.password,
-      fullName: createForm.fullName,
-      email: createForm.email,
-      phoneNumber: createForm.phoneNumber,
-      phone: createForm.phoneNumber,
-      identityNumber: createForm.identityNumber,
-      roomId: createForm.roomId ? Number(createForm.roomId) : null,
-      address: createForm.address,
-      emergencyContact: createForm.emergencyContact,
-      gender: createForm.gender,
-      dateOfBirth: createForm.dateOfBirth ? new Date(createForm.dateOfBirth).toISOString() : null
+      userName: trimmedCreateForm.userName,
+      password: trimmedCreateForm.password,
+      fullName: trimmedCreateForm.fullName,
+      email: trimmedCreateForm.email,
+      phoneNumber: trimmedCreateForm.phoneNumber,
+      phone: trimmedCreateForm.phoneNumber,
+      identityNumber: trimmedCreateForm.identityNumber,
+      roomId: trimmedCreateForm.roomId ? Number(trimmedCreateForm.roomId) : null,
+      address: trimmedCreateForm.address,
+      emergencyContact: trimmedCreateForm.emergencyContact,
+      gender: trimmedCreateForm.gender,
+      dateOfBirth: trimmedCreateForm.dateOfBirth ? new Date(trimmedCreateForm.dateOfBirth).toISOString() : null
     }),
     onSuccess: () => {
+      setCreateError(null);
       queryClient.invalidateQueries({ queryKey: ["staff", "residents", "all"] });
       setCreateForm({
         userName: "",
@@ -320,8 +350,28 @@ export function StaffResidentsPage() {
         gender: "",
         dateOfBirth: ""
       });
+    },
+    onError: (error: any) => {
+      setCreateError(getApiErrorMessage(error, "Không thể tạo resident. Vui lòng kiểm tra lại dữ liệu."));
     }
   });
+
+  const canCreateResident = missingRequiredFields.length === 0 && !hasInvalidRoomId && !createResident.isPending;
+
+  const handleCreateResident = () => {
+    if (missingRequiredFields.length > 0) {
+      setCreateError(`Vui lòng nhập đầy đủ các trường bắt buộc: ${missingRequiredFields.join(", ")}.`);
+      return;
+    }
+
+    if (hasInvalidRoomId) {
+      setCreateError("Room ID phải là số nguyên dương.");
+      return;
+    }
+
+    setCreateError(null);
+    createResident.mutate();
+  };
 
   return (
     <section className="page-shell space-y-4">
@@ -330,22 +380,23 @@ export function StaffResidentsPage() {
       <div className="glass-card rounded-xl p-4">
         <h3 className="font-semibold">Create Resident</h3>
         <div className="mt-2 grid gap-2 md:grid-cols-4">
-          <input value={createForm.userName} onChange={(event) => setCreateForm((prev) => ({ ...prev, userName: event.target.value }))} placeholder="Username" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Password" type="password" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.fullName} onChange={(event) => setCreateForm((prev) => ({ ...prev, fullName: event.target.value }))} placeholder="Full name" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.phoneNumber} onChange={(event) => setCreateForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} placeholder="Phone" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={createForm.identityNumber} onChange={(event) => setCreateForm((prev) => ({ ...prev, identityNumber: event.target.value }))} placeholder="CCCD" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <select value={createForm.gender} onChange={(event) => setCreateForm((prev) => ({ ...prev, gender: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
+          <input value={createForm.userName} onChange={(event) => setCreateForm((prev) => ({ ...prev, userName: event.target.value }))} placeholder="Username" required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={createForm.password} onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Password" type="password" required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={createForm.fullName} onChange={(event) => setCreateForm((prev) => ({ ...prev, fullName: event.target.value }))} placeholder="Full name" required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={createForm.email} onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" type="email" required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={createForm.phoneNumber} onChange={(event) => setCreateForm((prev) => ({ ...prev, phoneNumber: event.target.value }))} placeholder="Phone" required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input value={createForm.identityNumber} onChange={(event) => setCreateForm((prev) => ({ ...prev, identityNumber: event.target.value }))} placeholder="CCCD" required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <select value={createForm.gender} onChange={(event) => setCreateForm((prev) => ({ ...prev, gender: event.target.value }))} required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5">
             <option value="">Gender</option>
             {genderOptions.map((gender) => (<option key={gender} value={gender}>{gender}</option>))}
           </select>
-          <input type="date" value={createForm.dateOfBirth} onChange={(event) => setCreateForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))} className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+          <input type="date" value={createForm.dateOfBirth} onChange={(event) => setCreateForm((prev) => ({ ...prev, dateOfBirth: event.target.value }))} required className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           <input value={createForm.roomId} onChange={(event) => setCreateForm((prev) => ({ ...prev, roomId: event.target.value }))} placeholder="Room ID" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           <input value={createForm.address} onChange={(event) => setCreateForm((prev) => ({ ...prev, address: event.target.value }))} placeholder="Address" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
           <input value={createForm.emergencyContact} onChange={(event) => setCreateForm((prev) => ({ ...prev, emergencyContact: event.target.value }))} placeholder="Emergency contact" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
-          <Button onClick={() => createResident.mutate()}>Create</Button>
+          <Button onClick={handleCreateResident} disabled={!canCreateResident}>{createResident.isPending ? "Creating..." : "Create"}</Button>
         </div>
+        {createError ? <p className="mt-2 text-sm text-red-500">{createError}</p> : null}
       </div>
 
       <div className="space-y-2">
