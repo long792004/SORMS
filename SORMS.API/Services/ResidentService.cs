@@ -43,8 +43,6 @@ namespace SORMS.API.Services
                 IsActive = r.IsActive,
                 Gender = r.Gender,
                 DateOfBirth = r.DateOfBirth,
-                IdentityVerified = r.IdentityVerified,
-                IdentityDocumentUrl = r.IdentityDocumentUrl,
                 IdentityVerifiedAt = r.IdentityVerifiedAt,
                 IdentityVerifiedByUserId = r.IdentityVerifiedByUserId
             });
@@ -81,8 +79,6 @@ namespace SORMS.API.Services
                 IsActive = resident.IsActive,
                 Gender = resident.Gender,
                 DateOfBirth = resident.DateOfBirth,
-                IdentityVerified = resident.IdentityVerified,
-                IdentityDocumentUrl = resident.IdentityDocumentUrl,
                 IdentityVerifiedAt = resident.IdentityVerifiedAt,
                 IdentityVerifiedByUserId = resident.IdentityVerifiedByUserId
             };
@@ -298,8 +294,6 @@ namespace SORMS.API.Services
                 IsActive = r.IsActive,
                 Gender = r.Gender,
                 DateOfBirth = r.DateOfBirth,
-                IdentityVerified = r.IdentityVerified,
-                IdentityDocumentUrl = r.IdentityDocumentUrl,
                 IdentityVerifiedAt = r.IdentityVerifiedAt,
                 IdentityVerifiedByUserId = r.IdentityVerifiedByUserId
             });
@@ -360,8 +354,6 @@ namespace SORMS.API.Services
                 IsActive = resident.IsActive,
                 Gender = resident.Gender,
                 DateOfBirth = resident.DateOfBirth,
-                IdentityVerified = resident.IdentityVerified,
-                IdentityDocumentUrl = resident.IdentityDocumentUrl,
                 IdentityVerifiedAt = resident.IdentityVerifiedAt,
                 IdentityVerifiedByUserId = resident.IdentityVerifiedByUserId
             };
