@@ -74,6 +74,11 @@ builder.Services.AddHttpClient<IChatbotService, ChatbotService>(client =>
             opts.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
         });
 
+    builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+    {
+        options.SuppressModelStateInvalidFilter = true;
+    });
+
 // ========== 4. JWT AUTHENTICATION ==========
 var jwtIssuer = configuration["Jwt:Issuer"];
     var jwtAudience = configuration["Jwt:Audience"];

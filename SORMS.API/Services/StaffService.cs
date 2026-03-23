@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SORMS.API.Data;
 using SORMS.API.DTOs;
 using SORMS.API.Interfaces;
@@ -34,7 +34,7 @@ namespace SORMS.API.Services
         public async Task<StaffDto> GetStaffByIdAsync(int id)
         {
             var staff = await _context.Staffs.FindAsync(id);
-            if (staff == null) return null;
+            if (staff == null) return null!;
 
             return new StaffDto
             {

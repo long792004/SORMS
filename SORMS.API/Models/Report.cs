@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -11,16 +11,16 @@ namespace SORMS.API.Models
         public int Id { get; set; }
 
         [Required, MaxLength(200)]
-        public string Title { get; set; }
+        public string Title { get; set; } = default!;
 
         [Required]
         public DateTime GeneratedDate { get; set; }
 
         [Required]
-        public string Content { get; set; }
+        public string Content { get; set; } = default!;
 
         [Required, MaxLength(100)]
-        public string CreatedBy { get; set; }
+        public string CreatedBy { get; set; } = default!;
 
         // Staff ID who created the report
         public int? StaffId { get; set; }

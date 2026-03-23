@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -11,26 +11,26 @@ namespace SORMS.API.Models
         public int Id { get; set; }
 
         [Required, MaxLength(100)]
-        public string Title { get; set; }
-
+        public string Title { get; set; } = default!;
+ 
         [Required, MaxLength(50)]
-        public string ServiceType { get; set; }
-
+        public string ServiceType { get; set; } = default!;
+ 
         [MaxLength(500)]
-        public string Description { get; set; }
-
+        public string Description { get; set; } = default!;
+ 
         [Required]
         public DateTime RequestDate { get; set; }
-
+ 
         [Required, MaxLength(50)]
         public string Status { get; set; } = "Pending"; // Pending, Approved, InProgress, Completed, Rejected
-
+ 
         // FK: Resident
         [Required]
         public int ResidentId { get; set; }
-
+ 
         [ForeignKey(nameof(ResidentId))]
-        public Resident Resident { get; set; }
+        public Resident Resident { get; set; } = default!;
 
         // Staff feedback/response
         public string? StaffFeedback { get; set; }

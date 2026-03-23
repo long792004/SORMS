@@ -57,7 +57,7 @@ namespace SORMS.API.Controllers
                 return Unauthorized("Không thể xác định người dùng.");
             }
 
-            var success = await _residentService.UpdateResidentProfileAsync(userId, dto.Address, dto.EmergencyContact, dto.Notes);
+            var success = await _residentService.UpdateResidentProfileAsync(userId, dto.Address, dto.EmergencyContact, dto.Notes, dto.IdentityDocumentUrl);
             if (!success)
                 return BadRequest("Không thể cập nhật profile.");
 
@@ -223,7 +223,7 @@ namespace SORMS.API.Controllers
                 return Unauthorized("Invalid token");
             }
 
-            var success = await _residentService.UpdateResidentAccountAsync(userId, dto.Email, dto.Phone);
+            var success = await _residentService.UpdateResidentAccountAsync(userId, dto.Email!, dto.Phone!);
             Console.WriteLine($"[API UpdateAccount] Update result: {success}");
             
             if (!success)
@@ -239,7 +239,7 @@ namespace SORMS.API.Controllers
         [Authorize(Roles = "Resident")]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateResidentProfileDto dto)
         {
-            Console.WriteLine($"[API UpdateProfile] Received - Address: {dto.Address}, EmergencyContact: {dto.EmergencyContact}, Notes: {dto.Notes}");
+            Console.WriteLine($"[API UpdateProfile] Received - Address: {dto.Address}, IdentityDocumentUrl: {dto.IdentityDocumentUrl}");
             
             if (!ModelState.IsValid)
             {
@@ -256,7 +256,7 @@ namespace SORMS.API.Controllers
                 return Unauthorized("Invalid token");
             }
 
-            var success = await _residentService.UpdateResidentProfileAsync(userId, dto.Address, dto.EmergencyContact, dto.Notes);
+            var success = await _residentService.UpdateResidentProfileAsync(userId, dto.Address, dto.EmergencyContact, dto.Notes, dto.IdentityDocumentUrl);
             Console.WriteLine($"[API UpdateProfile] Update result: {success}");
             
             if (!success)

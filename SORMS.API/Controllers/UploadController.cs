@@ -15,8 +15,8 @@ namespace SORMS.API.Controllers
         }
 
         [HttpPost("image")]
-        [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> UploadImage(IFormFile file)
+        [Authorize(Roles = "Admin,Staff,Resident")]
+        public async Task<IActionResult> UploadImage([FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("No file uploaded.");

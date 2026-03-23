@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -11,20 +11,20 @@ namespace SORMS.API.Models
         public int Id { get; set; }
 
         [Required, MaxLength(50)]
-        public string UserName { get; set; }
+        public string UserName { get; set; } = default!;
 
         [Required, MaxLength(100), EmailAddress]
-        public string Email { get; set; }
+        public string Email { get; set; } = default!;
 
         [Required]
-        public string PasswordHash { get; set; }
+        public string PasswordHash { get; set; } = default!;
 
         // FK: Role
         [Required]
         public int RoleId { get; set; }
 
         [ForeignKey(nameof(RoleId))]
-        public Role Role { get; set; }
+        public Role Role { get; set; } = default!;
 
         public bool IsActive { get; set; } = true;
 

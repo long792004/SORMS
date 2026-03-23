@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -64,7 +64,7 @@ namespace SORMS.API.Services
                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
             if (user == null || !VerifyPassword(loginDto.Password, user.PasswordHash))
-                return null;
+                return null!;
 
             return GenerateJwtToken(user);
         }
@@ -76,14 +76,14 @@ namespace SORMS.API.Services
 
             if (string.IsNullOrWhiteSpace(normalizedEmail) || string.IsNullOrWhiteSpace(normalizedUserName))
             {
-                return null;
+                return null!;
             }
 
             var existingUser = await _context.Users
                 .AnyAsync(u => u.UserName == normalizedUserName || u.Email == normalizedEmail);
 
             if (existingUser)
-                return null;
+                return null!;
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -173,7 +173,7 @@ namespace SORMS.API.Services
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.UserName == username);
 
-            if (user == null) return null;
+            if (user == null) return null!;
 
             return new UserDto
             {
@@ -205,7 +205,7 @@ namespace SORMS.API.Services
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email);
 
-            if (user == null) return null;
+            if (user == null) return null!;
 
             return new UserDto
             {

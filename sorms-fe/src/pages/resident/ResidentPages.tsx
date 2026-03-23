@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
+import { Bell, Check, X, Info, Clock, BedDouble } from "lucide-react";
 import { InvoiceCard } from "@/components/cards/InvoiceCard";
 import { Button } from "@/components/ui/Button";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
@@ -13,6 +13,7 @@ import { serviceRequestApi } from "@/api/serviceRequestApi";
 import { residentApi } from "@/api/residentApi";
 import { reviewApi } from "@/api/reviewApi";
 import { roomApi } from "@/api/roomApi";
+import { uploadApi } from "@/api/uploadApi";
 import { useAuthStore } from "@/store/authStore";
 
 const listOf = (value: unknown): any[] => (Array.isArray(value) ? value : []);
@@ -40,11 +41,21 @@ const formatRemainingTime = (expiresAt?: string | null) => {
   if (!expiresAt) return "";
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (Number.isNaN(diff)) return "";
-  if (diff <= 0) return "Đã hết hạn giữ phòng";
+  if (diff <= 0) return "Đã hết hạn chờ tính phí";
   const totalMinutes = Math.floor(diff / 60000);
   const minutes = totalMinutes % 60;
   const seconds = Math.floor((diff % 60000) / 1000);
-  return `Còn ${minutes}m ${seconds}s`;
+  return `Còn ${totalMinutes}m ${seconds}s`;
+};
+
+const useCountdown = (expiresAt?: string | null) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!expiresAt) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+  return formatRemainingTime(expiresAt);
 };
 
 const countNights = (checkIn: string, checkOut: string) => {
@@ -119,6 +130,8 @@ export function ResidentProfilePage() {
   const [address, setAddress] = useState("");
   const [emergencyContact, setEmergencyContact] = useState("");
   const [notes, setNotes] = useState("");
+  const [identityDocumentUrl, setIdentityDocumentUrl] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     const profile = data ?? {};
@@ -127,6 +140,7 @@ export function ResidentProfilePage() {
     setAddress(profile.address ?? "");
     setEmergencyContact(profile.emergencyContact ?? "");
     setNotes(profile.notes ?? "");
+    setIdentityDocumentUrl(profile.identityDocumentUrl ?? "");
   }, [data]);
 
   const updateAccount = useMutation({
@@ -135,9 +149,23 @@ export function ResidentProfilePage() {
   });
 
   const updateProfile = useMutation({
-    mutationFn: () => residentApi.updateProfile({ address, emergencyContact, notes }),
+    mutationFn: () => residentApi.updateProfile({ address, emergencyContact, notes, identityDocumentUrl }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resident", "my-profile"] })
   });
+
+  const handleUploadCCCD = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    try {
+      setIsUploading(true);
+      const res = await uploadApi.uploadImage(e.target.files[0]);
+      setIdentityDocumentUrl(res.data?.imageUrl ?? res.data?.ImageUrl ?? "");
+    } catch (err) {
+      console.error(err);
+      alert("Tải lên thất bại. Vui lòng thử lại.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const profile = data ?? {};
 
@@ -160,7 +188,32 @@ export function ResidentProfilePage() {
           <input value={emergencyContact} onChange={(event) => setEmergencyContact(event.target.value)} placeholder="Emergency Contact" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
           <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notes" className="h-24 rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
         </div>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold">Ảnh CCCD / Passport (Bắt buộc để Check-in):</p>
+          <div className="flex items-center gap-4">
+            {identityDocumentUrl ? (
+              <img src={identityDocumentUrl} alt="CCCD" className="h-32 w-48 rounded-lg object-cover border border-slate-200 dark:border-white/10" />
+            ) : (
+              <div className="flex h-32 w-48 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 text-sm text-slate-400 dark:border-slate-700 dark:bg-white/5">
+                Chưa có ảnh
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <label className="cursor-pointer rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+                {isUploading ? "Đang tải lên..." : "Chọn ảnh tải lên"}
+                <input type="file" className="hidden" accept="image/*" disabled={isUploading} onChange={handleUploadCCCD} />
+              </label>
+              <p className="text-xs text-slate-500">Giới hạn 5MB. (.jpg, .png)</p>
+            </div>
+          </div>
+          {profile.identityVerified ? (
+             <p className="text-sm font-medium text-emerald-500">✔️ Giấy tờ đã được nhân viên xác minh.</p>
+          ) : identityDocumentUrl ? (
+             <p className="text-sm font-medium text-amber-500">⏳ Giấy tờ đang chờ nhân viên xác minh.</p>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
           <Button onClick={() => updateAccount.mutate()}>Update Account</Button>
           <Button variant="ghost" onClick={() => updateProfile.mutate()}>Update Profile</Button>
         </div>
@@ -172,6 +225,13 @@ export function ResidentProfilePage() {
 export function ResidentBookingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [nowTime, setNowTime] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const { data } = useQuery({
     queryKey: ["resident", "checkin", "history"],
     queryFn: async () => {
@@ -180,6 +240,15 @@ export function ResidentBookingPage() {
     }
   });
   const { data: invoiceData } = useMyInvoices();
+
+  const { data: profileResponse } = useQuery({
+    queryKey: ["resident", "my-profile"],
+    queryFn: async () => {
+      const response = await residentApi.getMyProfile();
+      return response.data?.data ?? response.data;
+    }
+  });
+  const profileData = profileResponse ?? null;
 
   const bookings = listOf(data);
   const invoices = listOf(invoiceData);
@@ -197,6 +266,15 @@ export function ResidentBookingPage() {
     return s === "pending" || s === "onhold";
   };
 
+  const upcomingCheckIns = bookings.filter((b: any) => {
+    const s = String(b.status ?? b.bookingStatus).toLowerCase();
+    const isConfirmedOrPending = s === "confirmed" || s === "pending"; 
+    const inDate = new Date(b.expectedCheckInDate ?? b.checkInDate).getTime();
+    const diff = inDate - nowTime;
+    // Tìm các phòng chưa check-in và giờ check-in diễn ra trong vòng 24h tới
+    return isConfirmedOrPending && diff > 0 && diff <= 86400000;
+  });
+
   return (
     <section className="page-shell space-y-4">
       <h1 className="section-title">My Booking History</h1>
@@ -204,15 +282,52 @@ export function ResidentBookingPage() {
         <Button variant="ghost" onClick={() => navigate("/resident/invoices")}>View payment history</Button>
         <Button variant="ghost" onClick={() => navigate("/contact")}>Contact support</Button>
       </div>
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Notifications</h2>
+        {/* Profile Verification Banner */}
+        {profileData && !profileData.identityDocumentUrl && (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-amber-600 dark:text-amber-200">
+             <p className="font-semibold text-base mb-1">⚠️ Yêu cầu bổ sung hình ảnh CCCD</p>
+             <p className="text-sm">Vui lòng cập nhật hình ảnh Giấy tờ tuỳ thân của bạn trong trang TÀI KHOẢN để nhân viên đối chiếu Check-in.</p>
+             <Button variant="ghost" className="mt-3 bg-white border-amber-400 dark:bg-black/50" onClick={() => navigate("/resident/profile")}>Đến trang Tài Khoản</Button>
+          </div>
+        )}
+
+        {/* Existing booking count / reminder */}
+        {upcomingCheckIns.length > 0 && (
+        <div className="rounded-xl border border-blue-400/30 bg-blue-500/10 p-4 text-blue-200">
+           <p className="font-semibold text-base mb-2">⏰ Sắp đến giờ nhận phòng</p>
+           {upcomingCheckIns.map((b: any, index: number) => {
+              const inDate = new Date(b.expectedCheckInDate ?? b.checkInDate).getTime();
+              const diff = inDate - nowTime;
+              const hours = Math.floor(diff / 3600000);
+              const mins = Math.floor((diff % 3600000) / 60000);
+              const secs = Math.floor((diff % 60000) / 1000);
+              const checkInTimeText = new Date(inDate).toLocaleString("vi-VN");
+              return (
+                 <p key={index} className="text-sm border-t border-blue-400/20 pt-2 mt-2 first:border-0 first:pt-0 first:mt-0">
+                    Bạn có lịch nhận phòng <strong>{b.roomNumber ?? b.roomId}</strong> vào lúc {checkInTimeText}. <br/>
+                    Thời gian còn lại: <strong>{hours}h {mins}m {secs}s</strong>.
+                 </p>
+              );
+           })}
+         </div>
+      )}
+      </div>
+
       {bookings.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">No booking records found.</p> : null}
       <div className="space-y-2">
         {bookings.map((item: any, index) => (
-          <article key={item.id ?? index} className="glass-card rounded-xl p-4 text-sm">
+          <article key={item.id ?? index} className="glass-card overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
             {(() => {
               const bookingId = item.id ?? index;
               const bookingRoomId = String(item.roomId ?? "");
               const bookingCheckIn = normalizeDateOnly(item.expectedCheckInDate ?? item.checkInDate);
               const bookingCheckOut = normalizeDateOnly(item.expectedCheckOutDate ?? item.checkOutDate);
+              const status = formatBookingStatus(item.bookingStatus ?? item.status);
+              const isConfirmed = status === "Confirmed" || status === "Checked In";
+              
               const linkedInvoice = invoices.find((invoice: any) => {
                 const sameRoom = String(invoice.roomId ?? "") === bookingRoomId;
                 const sameCheckIn = normalizeDateOnly(invoice.bookingCheckInDate ?? invoice.checkInDate) === bookingCheckIn;
@@ -221,32 +336,97 @@ export function ResidentBookingPage() {
               });
 
               return (
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-semibold">Booking #{bookingId}</p>
-                <p className="muted-text">Room {item.roomNumber ?? item.roomId} • {bookingCheckIn} → {bookingCheckOut}</p>
-                <p className="mt-1 text-primary">Status: {formatBookingStatus(item.bookingStatus ?? item.status)}</p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Guests: {item.numberOfResidents ?? "-"}</p>
-                {item.bookerFullName ? <p className="text-xs text-slate-500 dark:text-slate-400">Booker: {item.bookerFullName}</p> : null}
-                {item.bookerPhone ? <p className="text-xs text-slate-500 dark:text-slate-400">Phone: {item.bookerPhone}</p> : null}
-                {item.bedPreference || item.smokingPreference || item.earlyCheckInRequested ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Requests: {[item.bedPreference, item.smokingPreference, item.earlyCheckInRequested ? "Early check-in" : ""].filter(Boolean).join(" • ")}
-                  </p>
-                ) : null}
-                <p className="text-xs text-slate-500 dark:text-slate-400">Payment: {linkedInvoice ? `${linkedInvoice.status ?? "Pending"} • ${(Number(linkedInvoice.totalAmount ?? linkedInvoice.amount ?? 0)).toLocaleString("vi-VN")} VND` : "No invoice linked"}</p>
-                {linkedInvoice?.id ? <p className="text-xs text-slate-500 dark:text-slate-400">Invoice ID: {linkedInvoice.id}</p> : null}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {linkedInvoice?.id ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate(`/checkout?invoiceId=${linkedInvoice.id}`)}>View booking details</Button> : null}
-                  {linkedInvoice?.id ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate("/resident/invoices")}>Open invoices</Button> : null}
+                <div>
+                  <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-4 py-3 dark:border-white/5 dark:bg-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <BedDouble className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 dark:text-white">Room {item.roomNumber ?? item.roomId}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Booking ID: #{bookingId}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        status === "Confirmed" ? "bg-emerald-500/10 text-emerald-500" : 
+                        status === "Checked In" ? "bg-blue-500/10 text-blue-500" :
+                        status === "Cancelled" ? "bg-slate-500/10 text-slate-500" : "bg-amber-500/10 text-amber-500"
+                      }`}>
+                        {status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-400">Thời gian lưu trú</p>
+                        <p className="mt-1 text-sm font-medium">{bookingCheckIn} → {bookingCheckOut}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-400">Người đặt & Liên hệ</p>
+                        <p className="mt-1 text-sm font-medium">{item.bookerFullName || "Chưa cập nhật"}</p>
+                        <p className="text-xs text-slate-500">{item.bookerPhone || "-"}</p>
+                      </div>
+                    </div>
+
+                    {/* Guest Tags */}
+                    {(() => {
+                      try {
+                        const guestsArr = JSON.parse(item.guestList);
+                        if (Array.isArray(guestsArr) && guestsArr.length > 0) {
+                          return (
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">Khách lưu trú ({guestsArr.length})</p>
+                              <div className="flex flex-wrap gap-2">
+                                {guestsArr.map((g: any, i: number) => (
+                                  <span key={i} className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                                    {g.fullName || "Khách " + (i+1)} {i === 0 ? "★" : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                      } catch (e) { /* ignore */ }
+                      return null;
+                    })()}
+
+                    {/* Check-in Instructions for Confirmed Bookings */}
+                    {isConfirmed && (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <p className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> Hướng dẫn nhận phòng
+                        </p>
+                        <p className="mt-1 text-[11px] text-emerald-600/80 dark:text-emerald-400/80 leading-relaxed">
+                          Vui lòng mang theo CCCD bản gốc để lễ tân đối chiếu. <br/>
+                          Thời gian mở cửa sân: 24/7. Hỗ trợ cư dân: 09xx.xxx.xxx
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-white/5">
+                      <div className="text-xs text-slate-500">
+                        {linkedInvoice ? (
+                          <p>Hóa đơn: <span className="font-semibold text-slate-700 dark:text-slate-200">{(Number(linkedInvoice.totalAmount ?? linkedInvoice.amount ?? 0)).toLocaleString("vi-VN")} VND</span> ({linkedInvoice.status})</p>
+                        ) : (
+                          <p className="text-amber-500">Chưa có thông tin thanh toán</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {linkedInvoice?.id && (
+                          <Button variant="ghost" className="h-8 px-3 text-[11px]" onClick={() => navigate(`/checkout?invoiceId=${linkedInvoice.id}`)}>Chi tiết</Button>
+                        )}
+                        {isCancellable(item.status ?? item.bookingStatus) && (
+                          <Button variant="ghost" className="h-8 px-3 text-[11px] text-rose-400 hover:text-rose-300" onClick={() => cancelBooking.mutate(Number(item.id))} disabled={cancelBooking.isPending}>
+                            Hủy đặt phòng
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              {isCancellable(item.status ?? item.bookingStatus) ? (
-                <Button variant="ghost" className="shrink-0 text-rose-400 hover:text-rose-300" onClick={() => cancelBooking.mutate(Number(item.id))} disabled={cancelBooking.isPending}>
-                  Cancel Booking
-                </Button>
-              ) : null}
-            </div>
               );
             })()}
           </article>
@@ -319,7 +499,7 @@ export function ResidentCheckinStatusPage() {
   const invoices = listOf(invoicesData);
   const pendingInvoice = invoices.find((invoice: any) => ["Pending", "Created"].includes(String(invoice.status ?? "")));
   const pendingInvoiceExpiresAt = pendingInvoice?.expirationTime ?? pendingInvoice?.expiredAt ?? pendingInvoice?.holdExpiresAt ?? null;
-  const pendingInvoiceRemaining = formatRemainingTime(pendingInvoiceExpiresAt);
+  const pendingInvoiceRemaining = useCountdown(pendingInvoiceExpiresAt);
   const availableRooms = listOf(roomsData);
   const isCheckInDateValid = Boolean(checkInDate && checkOutDate && checkOutDate > checkInDate);
 
@@ -427,6 +607,10 @@ export function ResidentPaymentPage() {
             id={String(invoice.id)}
             amount={`${Number(invoice.totalAmount ?? invoice.amount ?? 0).toLocaleString("vi-VN")} VND`}
             status={invoice.status ?? "Pending"}
+            roomInfo={invoice.roomNumber ?? invoice.roomId}
+            checkIn={normalizeDateOnly(invoice.bookingCheckInDate ?? invoice.checkInDate)}
+            checkOut={normalizeDateOnly(invoice.bookingCheckOutDate ?? invoice.checkOutDate)}
+            guestList={invoice.guestNames ?? invoice.guestList}
             onPay={() => navigate(`/checkout?invoiceId=${invoice.id}`)}
           />
         ))}
@@ -661,8 +845,12 @@ export function ResidentInvoicesPage() {
             id={String(invoice.id)}
             amount={`${Number(invoice.totalAmount ?? invoice.amount ?? 0).toLocaleString("vi-VN")} VND`}
             status={invoice.status ?? "Pending"}
+            roomInfo={invoice.roomNumber ?? invoice.roomId}
+            checkIn={normalizeDateOnly(invoice.bookingCheckInDate ?? invoice.checkInDate)}
+            checkOut={normalizeDateOnly(invoice.bookingCheckOutDate ?? invoice.checkOutDate)}
+            guestList={invoice.guestNames ?? invoice.guestList}
             onPay={
-              ["Pending", "Created"].includes(String(invoice.status ?? ""))
+              ["Created", "Pending"].includes(String(invoice.status ?? ""))
                 ? () => navigate(`/checkout?invoiceId=${invoice.id}`)
                 : undefined
             }
@@ -681,10 +869,13 @@ export function CheckoutPage() {
   const roomId = searchParams.get("roomId") ?? "";
   const checkIn = searchParams.get("checkIn") ?? "";
   const checkOut = searchParams.get("checkOut") ?? "";
+  const checkInTime = decodeURIComponent(searchParams.get("checkInTime") ?? "14:00");
+  const checkOutTime = decodeURIComponent(searchParams.get("checkOutTime") ?? "12:00");
   const roomPriceFromQuery = Number(searchParams.get("roomPrice") ?? "0");
   const roomNumberFromQuery = searchParams.get("roomNumber") ?? "";
   const justBooked = searchParams.get("booked") === "true";
-  const guests = Number(searchParams.get("guests") ?? "1");
+  const guestsCount = Number(searchParams.get("guests") ?? "1");
+
   const parsedRoomId = Number(roomId);
   const hasValidRoomId = Number.isFinite(parsedRoomId) && parsedRoomId > 0;
   const hasValidDateRange = Boolean(checkIn && checkOut && checkOut > checkIn);
@@ -695,11 +886,45 @@ export function CheckoutPage() {
   const [voucherApplied, setVoucherApplied] = useState(false);
   const [voucherMessage, setVoucherMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [identityNumber, setIdentityNumber] = useState("");
-  const [guestList, setGuestList] = useState("");
+  const [guestsData, setGuestsData] = useState<Array<{ fullName: string; identityNumber: string; phone: string }>>(() => {
+    return Array.from({ length: guestsCount }).map((_, i) => ({
+      fullName: i === 0 ? "" : "",
+      identityNumber: "",
+      phone: i === 0 ? "" : ""
+    }));
+  });
+
+  const { data: myProfile } = useQuery({
+    queryKey: ["resident", "my-profile"],
+    queryFn: async () => {
+      const response = await residentApi.getMyProfile();
+      return response.data?.data ?? response.data;
+    }
+  });
+
+  // Tự động điền khách hàng số 1 bằng profile
+  useEffect(() => {
+    if (myProfile && !guestsData[0].fullName && !guestsData[0].phone) {
+      setGuestsData((prev) => {
+        const newData = [...prev];
+        newData[0] = {
+          fullName: myProfile.fullName ?? "",
+          phone: myProfile.phoneNumber ?? myProfile.phone ?? "",
+          identityNumber: myProfile.identityNumber ?? ""
+        };
+        return newData;
+      });
+    }
+  }, [myProfile]);
+
+  const updateGuest = (index: number, field: "fullName" | "identityNumber" | "phone", value: string) => {
+    setGuestsData((prev) => {
+      const newData = [...prev];
+      newData[index] = { ...newData[index], [field]: value };
+      return newData;
+    });
+  };
+
   const [bedPreference, setBedPreference] = useState("Double Bed");
   const [smokingPreference, setSmokingPreference] = useState("Non-smoking");
   const [earlyCheckIn, setEarlyCheckIn] = useState(false);
@@ -732,19 +957,24 @@ export function CheckoutPage() {
         throw new Error("Ngày check-out phải lớn hơn ngày check-in.");
       }
 
+      if (!guestsData[0].fullName || !guestsData[0].phone) {
+        throw new Error("Vui lòng điền họ tên và số điện thoại của người đặt chính.");
+      }
+
       return checkInApi.requestCheckIn({
         roomId: parsedRoomId,
         checkInDate: toApiDateTime(checkIn),
         checkOutDate: toApiDateTime(checkOut),
-        numberOfResidents: Math.max(1, guests || 1),
-        bookerFullName: fullName.trim() || undefined,
-        bookerEmail: email.trim() || undefined,
-        bookerPhone: phone.trim() || undefined,
-        bookerIdentityNumber: identityNumber.trim() || undefined,
-        guestList: guestList.trim() || undefined,
+        numberOfResidents: Math.max(1, guestsCount || 1),
+        bookerFullName: guestsData[0].fullName.trim() || undefined,
+        bookerPhone: guestsData[0].phone.trim() || undefined,
+        bookerIdentityNumber: guestsData[0].identityNumber.trim() || undefined,
+        guestList: JSON.stringify(guestsData.filter(g => g.fullName.trim() !== "")),
         bedPreference,
         smokingPreference,
-        earlyCheckInRequested: earlyCheckIn
+        earlyCheckInRequested: earlyCheckIn,
+        checkInTime: checkInTime ? `${checkInTime}:00` : null,
+        checkOutTime: checkOutTime ? `${checkOutTime}:00` : null
       });
     },
     onSuccess: async () => {
@@ -758,7 +988,7 @@ export function CheckoutPage() {
 
       if (pendingInvoice?.id) {
         navigate(
-          `/checkout?invoiceId=${pendingInvoice.id}&roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}&roomPrice=${roomPriceFromQuery}&roomNumber=${encodeURIComponent(roomNumberFromQuery)}&booked=true`,
+          `/checkout?invoiceId=${pendingInvoice.id}&roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guestsCount}&roomPrice=${roomPriceFromQuery}&roomNumber=${encodeURIComponent(roomNumberFromQuery)}&booked=true`,
           { replace: true }
         );
         return;
@@ -777,12 +1007,12 @@ export function CheckoutPage() {
   const isPaid = currentPaymentStatus === "Paid";
   const isAwaitingHotelPayment = currentPaymentStatus === "AwaitingHotelPayment";
   const holdExpiresAt = (invoice as any)?.expirationTime ?? (invoice as any)?.expiredAt ?? (invoice as any)?.holdExpiresAt ?? null;
-  const holdRemaining = formatRemainingTime(holdExpiresAt);
+  const holdRemaining = useCountdown(holdExpiresAt);
   const bookingCheckIn = String((invoice as any)?.bookingCheckInDate ?? (invoice as any)?.checkInDate ?? checkIn ?? "");
   const bookingCheckOut = String((invoice as any)?.bookingCheckOutDate ?? (invoice as any)?.checkOutDate ?? checkOut ?? "");
   const bookingRoomId = String((invoice as any)?.roomId ?? roomId ?? "");
   const bookingRoomNumber = String((invoice as any)?.roomNumber ?? decodeURIComponent(roomNumberFromQuery || "") ?? bookingRoomId);
-  const bookingGuests = Number((invoice as any)?.bookingNumberOfResidents ?? guests ?? 1);
+  const bookingGuests = Number((invoice as any)?.bookingNumberOfResidents ?? guestsCount ?? 1);
   const bookingNights = countNights(bookingCheckIn.slice(0, 10), bookingCheckOut.slice(0, 10));
   const originalAmount = Number((invoice as any)?.originalAmount ?? (invoice as any)?.amount ?? roomPriceFromQuery ?? 0);
   const discountAmount = Number((invoice as any)?.discountAmount ?? 0);
@@ -811,7 +1041,14 @@ export function CheckoutPage() {
 
   return (
     <section className="page-shell space-y-5">
-      <h1 className="section-title">Payment Checkout</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="section-title">Payment Checkout</h1>
+        {holdRemaining ? (
+          <div className="rounded border border-amber-400/50 bg-amber-500/10 px-3 py-1 text-amber-600 dark:text-amber-400 animate-pulse font-medium text-sm">
+            Hold expires in: {holdRemaining}
+          </div>
+        ) : null}
+      </div>
       {justBooked ? (
         <div className="glass-card rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
           Booking đã tạo thành công. Vui lòng hoàn tất thanh toán để giữ phòng và tiếp tục gửi/duyệt yêu cầu check-in.
@@ -831,7 +1068,7 @@ export function CheckoutPage() {
           <p className="font-semibold text-slate-900 dark:text-slate-100">Thông tin đặt phòng</p>
           <p className="mt-1 text-slate-600 dark:text-slate-300">Phòng: {decodeURIComponent(roomNumberFromQuery || "") || roomId}</p>
           <p className="text-slate-600 dark:text-slate-300">Check-in: {checkIn} | Check-out: {checkOut}</p>
-          <p className="text-slate-600 dark:text-slate-300">Số người ở: {Math.max(1, guests || 1)}</p>
+          <p className="text-slate-600 dark:text-slate-300">Số người ở: {Math.max(1, guestsCount || 1)}</p>
           <p className="text-slate-600 dark:text-slate-300">Số tiền tạm tính: {roomPriceFromQuery.toLocaleString("vi-VN")} VND</p>
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Hệ thống sẽ tạo yêu cầu check-in và invoice để bạn thanh toán.</p>
           {bookingError ? <p className="mt-2 text-xs text-rose-300">{bookingError}</p> : null}
@@ -845,12 +1082,41 @@ export function CheckoutPage() {
       <div className="glass-card rounded-xl p-5">
         <h2 className="text-lg font-semibold">Booking Form</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Nhập thông tin người đặt, khách lưu trú và yêu cầu đặc biệt trước khi thanh toán.</p>
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Full name" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone number" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <input value={identityNumber} onChange={(event) => setIdentityNumber(event.target.value)} placeholder="CMND/CCCD (nếu yêu cầu)" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
-          <textarea value={guestList} onChange={(event) => setGuestList(event.target.value)} placeholder="Danh sách khách lưu trú (nếu nhiều người)" className="h-20 rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/5 md:col-span-2" />
+        <div className="mt-3 space-y-4">
+          {guestsData.map((guest, index) => (
+            <div key={index} className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-sm">
+                  Khách {index + 1} {index === 0 ? <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">Người đặt chính</span> : ""}
+                </p>
+                {index === 0 && (
+                  <p className="text-xs text-slate-500">Thông tin liên hệ bắt buộc</p>
+                )}
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <input
+                  value={guest.fullName}
+                  onChange={(e) => updateGuest(index, "fullName", e.target.value)}
+                  placeholder="Họ và tên"
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5"
+                />
+                <input
+                  value={guest.phone}
+                  onChange={(e) => updateGuest(index, "phone", e.target.value)}
+                  placeholder="Số điện thoại"
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5"
+                />
+                {index === 0 && (
+                  <input
+                    value={guest.identityNumber}
+                    onChange={(e) => updateGuest(index, "identityNumber", e.target.value)}
+                    placeholder="CCCD / Passport"
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5 md:col-span-2"
+                  />
+                )}
+              </div>
+            </div>
+          ))}
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-3">
           <select value={bedPreference} onChange={(event) => setBedPreference(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5">
@@ -873,22 +1139,78 @@ export function CheckoutPage() {
           Thiếu invoiceId. Vui lòng vào trang Invoice và chọn hóa đơn cần thanh toán.
         </div>
       ) : null}
-      <div className="glass-card rounded-xl p-5">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Invoice ID: {invoiceId || "(add ?invoiceId=...)"}</p>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Phòng: {bookingRoomNumber || bookingRoomId || "-"}</p>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Ngày ở: {bookingCheckIn ? bookingCheckIn.slice(0, 10) : "-"} → {bookingCheckOut ? bookingCheckOut.slice(0, 10) : "-"}</p>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Số đêm: {bookingNights || "-"} • Số khách: {bookingGuests}</p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Mã giảm giá được tạo bởi Admin và được áp dụng ở bước thanh toán này.</p>
-        <div className="mt-3 space-y-1 text-sm">
-          <p>Room cost: {originalAmount.toLocaleString("vi-VN")} VND</p>
-          <p>Estimated tax (10%): {estimatedTax.toLocaleString("vi-VN")} VND</p>
-          <p>Estimated service fee (5%): {estimatedServiceFee.toLocaleString("vi-VN")} VND</p>
-          <p>Discount Amount: {discountAmount.toLocaleString("vi-VN")} VND</p>
-          <p className="font-semibold text-secondary">Final total: {totalAmount.toLocaleString("vi-VN")} VND</p>
-          <p className="font-semibold">Payment Status: <span className={isPaid ? "text-emerald-400" : "text-amber-300"}>{currentPaymentStatus}</span></p>
-          {!isPaid && holdExpiresAt ? (
-            <p className="text-amber-300">Hold expires at: {new Date(holdExpiresAt).toLocaleString("vi-VN")} {holdRemaining ? `• ${holdRemaining}` : ""}</p>
-          ) : null}
+      <div className="glass-card overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+        <div className="bg-slate-50 p-4 dark:bg-white/5">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            Booking Receipt
+          </h2>
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 mt-1">Invoice ID: {invoiceId || "Draft"}</p>
+        </div>
+        
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-[10px] uppercase text-slate-500 font-bold">Room Information</p>
+              <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">Room {bookingRoomNumber || bookingRoomId || "-"}</p>
+              <p className="text-slate-600 dark:text-slate-400">Standard Premium</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-500 font-bold">Stay Duration</p>
+              <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{bookingCheckIn.slice(0, 10)} → {bookingCheckOut.slice(0, 10)}</p>
+              <p className="text-slate-600 dark:text-slate-400">{bookingNights || "-"} Nights • {bookingGuests} Guests</p>
+            </div>
+          </div>
+
+          {guestsData.length > 0 && guestsData[0].fullName && (
+            <div className="rounded-lg border border-dashed border-slate-200 p-3 dark:border-white/20">
+              <p className="text-[10px] uppercase text-slate-500 font-bold mb-2">Guest List</p>
+              <div className="flex flex-wrap gap-2">
+                {guestsData.filter(g => g.fullName).map((g, i) => (
+                  <span key={i} className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    {g.fullName} {i === 0 ? "★" : ""}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-white/10">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-400 text-xs">Room cost ({bookingNights} nights)</span>
+              <span className="font-medium">{originalAmount.toLocaleString("vi-VN")} VND</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-400 text-xs">Service Fee (5%)</span>
+              <span className="font-medium">{estimatedServiceFee.toLocaleString("vi-VN")} VND</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-400 text-xs">Tax (10%)</span>
+              <span className="font-medium">{estimatedTax.toLocaleString("vi-VN")} VND</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm text-emerald-500 font-medium">
+                <span className="text-xs">Discount</span>
+                <span>-{discountAmount.toLocaleString("vi-VN")} VND</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center pt-3 border-t-2 border-slate-900 dark:border-white/20">
+              <span className="font-bold text-slate-900 dark:text-white">Total Amount</span>
+              <span className="text-xl font-bold text-primary">{totalAmount.toLocaleString("vi-VN")} VND</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs pt-2">
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${isPaid ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="font-semibold uppercase tracking-wider">{currentPaymentStatus}</span>
+            </div>
+            {!isPaid && holdExpiresAt && (
+              <div className="text-amber-500 font-medium bg-amber-500/10 px-2 py-1 rounded">
+                Hold expires in: {holdRemaining || "Expired"}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -964,7 +1286,11 @@ export function CheckoutPage() {
           }
 
           createLink.mutate(
-            { invoiceId },
+            { 
+              invoiceId,
+              returnUrl: `${window.location.origin}/booking-success?invoiceId=${invoiceId}`,
+              cancelUrl: `${window.location.origin}/booking-success?invoiceId=${invoiceId}&cancel=true`
+            },
             {
               onSuccess: (response) => {
                 setPaymentLinkData({
@@ -1034,6 +1360,108 @@ export function CheckoutPage() {
       ) : null}
 
       <Button variant="ghost" className="w-full max-w-sm" onClick={() => navigate("/resident/invoices")}>Quay lại danh sách invoice</Button>
+    </section>
+  );
+}
+
+export function BookingSuccessPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const invoiceId = searchParams.get("invoiceId");
+  const orderCode = searchParams.get("orderCode");
+  const cancel = searchParams.get("cancel") === "true";
+  const status = searchParams.get("status");
+  
+  const isSuccess = status === "PAID" || (!cancel && orderCode);
+
+  const { data: invoice } = useInvoiceDetail(invoiceId ?? "");
+  const totalAmount = Number(invoice?.totalAmount ?? invoice?.amount ?? 0);
+
+  return (
+    <section className="page-shell flex flex-col items-center justify-center min-h-[80vh] py-12">
+      <div className="w-full max-w-xl space-y-8 text-center">
+        {/* Animated Icon */}
+        <div className="relative mx-auto h-24 w-24">
+          <div className={`absolute inset-0 animate-ping rounded-full opacity-20 ${isSuccess ? "bg-emerald-500" : "bg-rose-500"}`}></div>
+          <div className={`relative flex h-24 w-24 items-center justify-center rounded-full shadow-lg ${isSuccess ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>
+            {isSuccess ? (
+              <Check className="h-12 w-12" />
+            ) : (
+              <X className="h-12 w-12" />
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            {isSuccess ? "Đặt phòng thành công!" : "Thanh toán chưa hoàn tất"}
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400">
+            {isSuccess 
+              ? "Cảm ơn bạn đã lựa chọn dịch vụ của chúng tôi. Thông tin đặt phòng của bạn đã được xác nhận."
+              : "Giao dịch của bạn đã bị hủy hoặc gặp lỗi. Bạn có thể thử lại từ danh sách hóa đơn."}
+          </p>
+        </div>
+
+        {isSuccess && (
+          <div className="glass-card overflow-hidden rounded-2xl border border-slate-200 text-left shadow-xl dark:border-white/10">
+            <div className="bg-slate-50 p-4 dark:bg-white/5 border-b border-slate-100 dark:border-white/5">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Xác nhận đặt phòng</p>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-sm text-slate-500">Mã đơn hàng</p>
+                  <p className="font-mono font-bold text-slate-900 dark:text-white">#{orderCode || invoiceId}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-slate-500">Trạng thái</p>
+                  <span className="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-500">Đã thanh toán</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 border-y border-slate-100 py-6 dark:border-white/5">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-bold">Phòng</p>
+                  <p className="mt-1 font-semibold">{invoice?.roomNumber || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-bold">Tổng thanh toán</p>
+                  <p className="mt-1 font-bold text-primary">{totalAmount.toLocaleString("vi-VN")} VND</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-bold">Nhận phòng</p>
+                  <p className="mt-1 text-sm">{normalizeDateOnly(invoice?.checkInDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-bold">Trả phòng</p>
+                  <p className="mt-1 text-sm">{normalizeDateOnly(invoice?.checkOutDate)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-primary/5 p-4 border border-primary/10">
+                <p className="text-xs font-bold text-primary flex items-center gap-2 mb-2">
+                  <Info className="h-3 w-3" /> Hướng dẫn tiếp theo
+                </p>
+                <ul className="text-xs space-y-2 text-slate-600 dark:text-slate-300">
+                  <li className="flex gap-2"><span>1.</span> <span>Mang theo CCCD bản gốc để nhận phòng.</span></li>
+                  <li className="flex gap-2"><span>2.</span> <span>Bạn có thể xem mã QR nhận phòng trong ứng dụng.</span></li>
+                  <li className="flex gap-2"><span>3.</span> <span>Mọi hỗ trợ vui lòng gọi hotline: 09xx-xxx-xxx.</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
+          {isSuccess ? (
+            <Button className="px-8 shadow-lg shadow-primary/20" onClick={() => navigate("/resident/bookings")}>Xem đơn đặt phòng</Button>
+          ) : (
+            <Button className="px-8" onClick={() => navigate(`/checkout?invoiceId=${invoiceId ?? ""}`)}>Thử lại ngay</Button>
+          )}
+          <Button variant="ghost" className="px-8" onClick={() => navigate("/resident/dashboard")}>Về trang chủ</Button>
+        </div>
+      </div>
     </section>
   );
 }

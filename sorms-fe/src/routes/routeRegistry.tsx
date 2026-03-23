@@ -22,7 +22,8 @@ import {
   ResidentPaymentPage,
   ResidentProfilePage,
   ResidentReviewsPage,
-  ResidentServiceRequestsPage
+  ResidentServiceRequestsPage,
+  BookingSuccessPage
 } from "../pages/resident/ResidentPages";
 import {
   AdminApplyVoucherPage,
@@ -100,7 +101,8 @@ export const allRoutes: RouteGroups = {
     { path: "/resident/services", element: <ResidentServiceRequestsPage /> },
     { path: "/resident/services/create", element: <ResidentCreateServiceRequestPage /> },
     { path: "/resident/invoices", element: <ResidentInvoicesPage /> },
-    { path: "/checkout", element: <CheckoutPage /> }
+    { path: "/checkout", element: <CheckoutPage /> },
+    { path: "/booking-success", element: <BookingSuccessPage /> }
   ],
   staff: [
     { path: "/staff/dashboard", element: <StaffDashboardPage /> },

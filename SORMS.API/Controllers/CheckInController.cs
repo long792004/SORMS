@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SORMS.API.DTOs;
 using SORMS.API.Interfaces;
@@ -27,6 +27,13 @@ namespace SORMS.API.Controllers
         {
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                    Console.WriteLine($"[CheckIn API] Model Invalid: {string.Join(", ", errors)}");
+                    return BadRequest(new { success = false, message = "Dữ liệu không hợp lệ.", errors = errors });
+                }
+
                 // Log tất cả claims để debug
                 var allClaims = string.Join(", ", User.Claims.Select(c => $"{c.Type}={c.Value}"));
                 Console.WriteLine($"[CheckIn API] All Claims: {allClaims}");

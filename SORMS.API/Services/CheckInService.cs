@@ -23,6 +23,20 @@ namespace SORMS.API.Services
             var requestedCheckIn = NormalizeUtcDate(request.CheckInDate);
             var requestedCheckOut = NormalizeUtcDate(request.CheckOutDate);
             var numberOfNights = (requestedCheckOut - requestedCheckIn).Days;
+            
+            TimeSpan? parsedCheckInTime = null;
+            if (!string.IsNullOrEmpty(request.CheckInTime) && TimeSpan.TryParse(request.CheckInTime, out var inTs))
+            {
+                parsedCheckInTime = inTs;
+                requestedCheckIn = requestedCheckIn.Add(inTs);
+            }
+            TimeSpan? parsedCheckOutTime = null;
+            if (!string.IsNullOrEmpty(request.CheckOutTime) && TimeSpan.TryParse(request.CheckOutTime, out var outTs))
+            {
+                parsedCheckOutTime = outTs;
+                requestedCheckOut = requestedCheckOut.Add(outTs);
+            }
+
             var numberOfResidents = Math.Max(1, request.NumberOfResidents);
             
             Console.WriteLine($"[CheckInService] CreateCheckInRequest DEBUG:");
@@ -62,6 +76,15 @@ namespace SORMS.API.Services
             if (room == null)
                 throw new Exception("Phòng không tồn tại");
 
+            if (parsedCheckInTime.HasValue && parsedCheckInTime.Value.Hours < room.CheckInFromHour)
+            {
+                throw new Exception($"Giờ check-in phải từ {room.CheckInFromHour}:00 trở đi.");
+            }
+            if (parsedCheckOutTime.HasValue && (parsedCheckOutTime.Value.Hours > room.CheckOutByHour || (parsedCheckOutTime.Value.Hours == room.CheckOutByHour && parsedCheckOutTime.Value.Minutes > 0)))
+            {
+                throw new Exception($"Giờ check-out phải trước hay bằng {room.CheckOutByHour}:00.");
+            }
+
             if (!room.IsActive)
                 throw new Exception("Phòng này hiện không hoạt động.");
 
@@ -95,6 +118,28 @@ namespace SORMS.API.Services
             if (roomOverlap)
                 throw new Exception("Phòng này đã có người đặt trong khoảng thời gian bạn chọn.");
 
+            // Kiểm tra xem đã có Reservation "Confirmed" cho phòng này và resident này trong khoảng thời gian này chưa
+            var existingReservation = await _context.Reservations
+                .Include(r => r.Guests)
+                .Where(r => r.ResidentId == residentId 
+                         && r.RoomId == roomId 
+                         && r.Status == "Confirmed"
+                         && r.CheckInDate.Date == requestedCheckIn.Date
+                         && r.CheckOutDate.Date == requestedCheckOut.Date)
+                .FirstOrDefaultAsync();
+
+            var finalGuestList = request.GuestList?.Trim();
+            if (string.IsNullOrEmpty(finalGuestList) && existingReservation != null && existingReservation.Guests.Any())
+            {
+                // Kế thừa danh sách khách từ Reservation
+                var guests = existingReservation.Guests.Select(g => new {
+                    fullName = g.FullName,
+                    identityNumber = g.IdentityNumber,
+                    phone = g.Phone
+                });
+                finalGuestList = System.Text.Json.JsonSerializer.Serialize(guests);
+            }
+
             // Tạo yêu cầu check-in
             var checkInRequest = new CheckInRecord
             {
@@ -103,17 +148,18 @@ namespace SORMS.API.Services
                 RequestTime = DateTime.UtcNow,
                 ExpectedCheckInDate = requestedCheckIn,
                 ExpectedCheckOutDate = requestedCheckOut,
-                NumberOfResidents = numberOfResidents,
-                BookerFullName = request.BookerFullName?.Trim(),
-                BookerEmail = request.BookerEmail?.Trim(),
-                BookerPhone = request.BookerPhone?.Trim(),
-                BookerIdentityNumber = request.BookerIdentityNumber?.Trim(),
-                GuestList = request.GuestList?.Trim(),
+                NumberOfResidents = Math.Max(numberOfResidents, existingReservation?.NumberOfGuests ?? 1),
+                BookerFullName = (request.BookerFullName ?? existingReservation?.Resident?.FullName)?.Trim(),
+                BookerEmail = (request.BookerEmail ?? existingReservation?.Resident?.Email)?.Trim(),
+                BookerPhone = (request.BookerPhone ?? existingReservation?.Resident?.Phone)?.Trim(),
+                BookerIdentityNumber = (request.BookerIdentityNumber ?? existingReservation?.Resident?.IdentityNumber)?.Trim(),
+                GuestList = finalGuestList,
                 BedPreference = request.BedPreference?.Trim(),
                 SmokingPreference = request.SmokingPreference?.Trim(),
                 EarlyCheckInRequested = request.EarlyCheckInRequested,
                 Status = "PendingCheckIn",
-                RequestType = "CheckIn"
+                RequestType = "CheckIn",
+                ReservationId = existingReservation?.Id // Thêm liên kết nếu Model có hỗ trợ
             };
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -121,38 +167,48 @@ namespace SORMS.API.Services
             _context.CheckInRecords.Add(checkInRequest);
             await _context.SaveChangesAsync();
 
-            var openInvoices = await _context.Invoices
-                .Where(i => i.ResidentId == residentId &&
-                            i.RoomId == roomId &&
-                            (i.Status == "Pending" || i.Status == "Created" || i.Status == "AwaitingHotelPayment"))
-                .ToListAsync();
-
-            foreach (var openInvoice in openInvoices)
+            // Nếu đã có Reservation Confirmed và Invoice liên quan đã Paid, không tạo Invoice mới
+            bool skipInvoice = false;
+            if (existingReservation != null && existingReservation.InvoiceId.HasValue)
             {
-                openInvoice.Status = "Cancelled";
+                var resInvoice = await _context.Invoices.FindAsync(existingReservation.InvoiceId.Value);
+                if (resInvoice != null && resInvoice.Status == "Paid")
+                {
+                    skipInvoice = true;
+                    // Cập nhật record đã thanh toán
+                    // record.Status = "Confirmed" ? Tùy business, thường vẫn chờ Staff duyệt check-in thực tế.
+                }
             }
 
-            var invoice = new Invoice
+            if (!skipInvoice)
             {
-                ResidentId = residentId,
-                RoomId = roomId,
-                Amount = dailyRate * numberOfNights,
-                DiscountAmount = 0,
-                TotalAmount = dailyRate * numberOfNights,
-                PaymentMethod = "PayOS",
-                Status = "Pending",
-                Description = $"Booking fee for room {room.RoomNumber}: {numberOfNights} night(s) x {dailyRate:N0}/day",
-                CreatedAt = DateTime.UtcNow
-            };
-            
-            Console.WriteLine($"[CheckInService] Invoice created:");
-            Console.WriteLine($"  DailyRate: {dailyRate}");
-            Console.WriteLine($"  NumberOfNights: {numberOfNights}");
-            Console.WriteLine($"  Amount: {invoice.Amount} (= {dailyRate} x {numberOfNights})");
-            Console.WriteLine($"  Description: {invoice.Description}");
+                var openInvoices = await _context.Invoices
+                    .Where(i => i.ResidentId == residentId &&
+                                i.RoomId == roomId &&
+                                (i.Status == "Pending" || i.Status == "Created" || i.Status == "AwaitingHotelPayment"))
+                    .ToListAsync();
 
-            _context.Invoices.Add(invoice);
-            await _context.SaveChangesAsync();
+                foreach (var openInvoice in openInvoices)
+                {
+                    openInvoice.Status = "Cancelled";
+                }
+
+                var invoice = new Invoice
+                {
+                    ResidentId = residentId,
+                    RoomId = roomId,
+                    Amount = dailyRate * numberOfNights,
+                    DiscountAmount = 0,
+                    TotalAmount = dailyRate * numberOfNights,
+                    PaymentMethod = "PayOS",
+                    Status = "Pending",
+                    Description = $"Booking fee for room {room.RoomNumber}: {numberOfNights} night(s) x {dailyRate:N0}/day",
+                    CreatedAt = DateTime.UtcNow
+                };
+                
+                _context.Invoices.Add(invoice);
+                await _context.SaveChangesAsync();
+            }
             await transaction.CommitAsync();
 
             // Gửi thông báo cho tất cả Staff và Admin
@@ -500,10 +556,10 @@ namespace SORMS.API.Services
         private async Task<CheckInRecordDto> MapToDto(CheckInRecord record)
         {
             if (record.Resident == null)
-                record.Resident = await _context.Residents.FindAsync(record.ResidentId);
+                record.Resident = (await _context.Residents.FindAsync(record.ResidentId))!;
             
             if (record.Room == null)
-                record.Room = await _context.Rooms.FindAsync(record.RoomId);
+                record.Room = (await _context.Rooms.FindAsync(record.RoomId))!;
 
             // ✅ Query ApprovedByName trực tiếp từ Users table
             // Nếu ApprovedBy = 0 (Admin từ config), set name = "Admin"
@@ -537,6 +593,8 @@ namespace SORMS.API.Services
                 BookerPhone = record.BookerPhone,
                 BookerIdentityNumber = record.BookerIdentityNumber,
                 GuestList = record.GuestList,
+                IdentityDocumentUrl = record.Resident?.IdentityDocumentUrl,
+                IdentityVerified = record.Resident?.IdentityVerified ?? false,
                 BedPreference = record.BedPreference,
                 SmokingPreference = record.SmokingPreference,
                 EarlyCheckInRequested = record.EarlyCheckInRequested,
@@ -549,7 +607,8 @@ namespace SORMS.API.Services
                 RejectReason = record.RejectReason,
                 ApprovedBy = record.ApprovedBy,
                 ApprovedByName = approvedByName,
-                RequestType = record.RequestType
+                RequestType = record.RequestType,
+                ReservationId = record.ReservationId
             };
         }
 

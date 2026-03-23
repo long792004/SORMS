@@ -13,19 +13,19 @@ namespace SORMS.API.Models
         public int ResidentId { get; set; }
 
         [ForeignKey(nameof(ResidentId))]
-        public Resident Resident { get; set; }
+        public Resident Resident { get; set; } = default!;
 
         [Required]
         public int RoomId { get; set; }
 
         [ForeignKey(nameof(RoomId))]
-        public Room Room { get; set; }
+        public Room Room { get; set; } = default!;
 
         [Required]
         public int CheckInId { get; set; }
 
         [ForeignKey(nameof(CheckInId))]
-        public CheckInRecord CheckIn { get; set; }
+        public CheckInRecord CheckIn { get; set; } = default!;
 
         [Range(1, 5)]
         public int Rating { get; set; }

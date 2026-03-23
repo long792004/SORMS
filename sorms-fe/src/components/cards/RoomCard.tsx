@@ -13,6 +13,9 @@ interface RoomCardProps {
   reviewCount?: number;
   status?: string;
   holdExpiresAt?: string | null;
+  /** Khi true: hiện badge trạng thái phòng (dùng cho Staff/Admin).
+   *  Khi false (mặc định): ẩn trạng thái — trang public Airbnb-style. */
+  showStatus?: boolean;
   onView?: () => void;
   onBook?: () => void;
 }
@@ -24,18 +27,13 @@ function StatusBadge({ status, holdExpiresAt }: { status: string; holdExpiresAt?
 
   useEffect(() => {
     if (status !== "OnHold" || !holdExpiresAt) return;
-
     const update = () => {
       const diff = new Date(holdExpiresAt).getTime() - Date.now();
-      if (diff <= 0) {
-        setRemaining("Hết hạn");
-        return;
-      }
+      if (diff <= 0) { setRemaining("Hết hạn"); return; }
       const m = Math.floor(diff / 60000);
       const s = Math.floor((diff % 60000) / 1000);
       setRemaining(`${m}:${String(s).padStart(2, "0")}`);
     };
-
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
@@ -49,7 +47,6 @@ function StatusBadge({ status, holdExpiresAt }: { status: string; holdExpiresAt?
       </span>
     );
   }
-
   if (status === "Occupied") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-2.5 py-0.5 text-xs font-semibold text-rose-300 border border-rose-400/30">
@@ -57,18 +54,14 @@ function StatusBadge({ status, holdExpiresAt }: { status: string; holdExpiresAt?
       </span>
     );
   }
-
   if (status === "Maintenance") {
-    const isPast = holdExpiresAt ? new Date(holdExpiresAt).getTime() <= Date.now() : false;
     const formattedDate = holdExpiresAt ? new Date(holdExpiresAt).toLocaleDateString("vi-VN") : "";
-    
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 border border-slate-400/30">
         Bảo trì {formattedDate ? `đến ${formattedDate}` : ""}
       </span>
     );
   }
-
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-400/30">
       Còn trống
@@ -85,36 +78,58 @@ export function RoomCard({
   reviewCount = 0,
   status = "Available",
   holdExpiresAt,
+  showStatus = false,
   onView,
-  onBook
+  onBook,
 }: RoomCardProps) {
   const coverImage = resolveMediaUrl(imageUrl) || fallbackImage;
   const isOnHold = status === "OnHold";
   const isOccupied = status === "Occupied";
   const isMaintenance = status === "Maintenance";
-  const canBook = !isOccupied && !isMaintenance;
+  // Trang public (showStatus=false): luôn cho Book — backend validate.
+  // Trang Staff/Admin (showStatus=true): khóa nút khi Occupied/Maintenance.
+  const canBook = showStatus ? (!isOccupied && !isMaintenance) : true;
 
   return (
     <motion.article whileHover={{ scale: 1.05 }} className="glass-card overflow-hidden rounded-xl">
       <button type="button" onClick={onView} className="relative block w-full text-left">
-        <img src={coverImage} alt={title} className={`h-44 w-full object-cover ${isOnHold ? "opacity-80" : ""}`} />
-        <div className="absolute top-2 right-2">
-          <StatusBadge status={status} holdExpiresAt={holdExpiresAt} />
-        </div>
+        <img
+          src={coverImage}
+          alt={title}
+          className={`h-44 w-full object-cover ${showStatus && isOnHold ? "opacity-80" : ""}`}
+        />
+        {showStatus && (
+          <div className="absolute top-2 right-2">
+            <StatusBadge status={status} holdExpiresAt={holdExpiresAt} />
+          </div>
+        )}
       </button>
+
       <div className="space-y-3 p-4">
         <button type="button" onClick={onView} className="text-left">
           <h4 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h4>
         </button>
         <p className="text-sm text-slate-700 dark:text-slate-300">{price}</p>
         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
-          <span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5 text-accent" />{rating} ({reviewCount})</span>
-          <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{location}</span>
-          <span className="inline-flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" />{status}</span>
+          <span className="inline-flex items-center gap-1">
+            <Star className="h-3.5 w-3.5 text-accent" />
+            {rating} ({reviewCount})
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-3.5 w-3.5" />
+            {location}
+          </span>
+          {showStatus && (
+            <span className="inline-flex items-center gap-1">
+              <BedDouble className="h-3.5 w-3.5" />
+              {status}
+            </span>
+          )}
         </div>
+
         {canBook ? (
           <Button className="w-full" onClick={onBook}>
-            {isOnHold ? "Xem chi tiết" : "Book now"}
+            {showStatus && isOnHold ? "Xem chi tiết" : "Book now"}
           </Button>
         ) : (
           <Button className="w-full opacity-50 cursor-not-allowed" disabled>

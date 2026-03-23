@@ -18,16 +18,16 @@ namespace SORMS.API.Models
         public User? User { get; set; }
 
         [Required, MaxLength(100)]
-        public string FullName { get; set; }
+        public string FullName { get; set; } = default!;
 
         [Required, MaxLength(100), EmailAddress]
-        public string Email { get; set; }
+        public string Email { get; set; } = default!;
 
         [Required, MaxLength(15), Phone]
-        public string Phone { get; set; }
+        public string Phone { get; set; } = default!;
 
         [Required, MaxLength(20)]
-        public string IdentityNumber { get; set; }
+        public string IdentityNumber { get; set; } = default!;
 
         [MaxLength(1000)]
         public string? IdentityDocumentUrl { get; set; }

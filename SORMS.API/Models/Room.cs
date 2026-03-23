@@ -26,6 +26,12 @@ namespace SORMS.API.Models
 
         public int MaxCapacity { get; set; } = 1;
 
+        /// <summary>Giờ bắt đầu được phép check-in (mặc định 14:00)</summary>
+        public int CheckInFromHour { get; set; } = 14;
+
+        /// <summary>Giờ phải trả phòng trước (mặc định 12:00)</summary>
+        public int CheckOutByHour { get; set; } = 12;
+
         [Required, MaxLength(20)]
         public string Status { get; set; } = "Available"; // "Available", "OnHold", "Occupied", "Maintenance"
 

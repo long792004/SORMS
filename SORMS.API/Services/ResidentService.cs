@@ -1,4 +1,4 @@
-﻿namespace SORMS.API.Services
+namespace SORMS.API.Services
 {
     using Microsoft.EntityFrameworkCore;
     using SORMS.API.Data;
@@ -30,6 +30,8 @@
                 Email = r.Email,
                 Phone = r.Phone,
                 IdentityNumber = r.IdentityNumber,
+                IdentityDocumentUrl = r.IdentityDocumentUrl,
+                IdentityVerified = r.IdentityVerified,
                 Role = r.Role,
                 RoomId = r.RoomId,
                 RoomNumber = r.Room?.RoomNumber,
@@ -55,7 +57,7 @@
                 .Include(r => r.User)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (resident == null) return null;
+            if (resident == null) return null!;
 
             return new ResidentDto
             {
@@ -66,6 +68,8 @@
                 Email = resident.Email,
                 Phone = resident.Phone,
                 IdentityNumber = resident.IdentityNumber,
+                IdentityDocumentUrl = resident.IdentityDocumentUrl,
+                IdentityVerified = resident.IdentityVerified,
                 Role = resident.Role,
                 RoomId = resident.RoomId,
                 RoomNumber = resident.Room?.RoomNumber,
@@ -150,6 +154,11 @@
             resident.Email = residentDto.Email;
             resident.Phone = string.IsNullOrWhiteSpace(residentDto.Phone) ? residentDto.PhoneNumber : residentDto.Phone;
             resident.IdentityNumber = residentDto.IdentityNumber;
+            if (residentDto.IdentityDocumentUrl != null) 
+            {
+                resident.IdentityDocumentUrl = residentDto.IdentityDocumentUrl;
+                resident.IdentityVerified = residentDto.IdentityVerified;
+            }
             resident.Role = residentDto.Role;
             resident.RoomId = residentDto.RoomId;
             
@@ -276,6 +285,8 @@
                 Email = r.Email,
                 Phone = r.Phone,
                 IdentityNumber = r.IdentityNumber,
+                IdentityDocumentUrl = r.IdentityDocumentUrl,
+                IdentityVerified = r.IdentityVerified,
                 Role = r.Role,
                 RoomId = r.RoomId,
                 RoomNumber = r.Room?.RoomNumber,
@@ -325,7 +336,7 @@
                 .Include(r => r.User)
                 .FirstOrDefaultAsync(r => r.UserId == userId);
 
-            if (resident == null) return null;
+            if (resident == null) return null!;
 
             return new ResidentDto
             {
@@ -336,6 +347,8 @@
                 Email = resident.Email,
                 Phone = resident.Phone,
                 IdentityNumber = resident.IdentityNumber,
+                IdentityDocumentUrl = resident.IdentityDocumentUrl,
+                IdentityVerified = resident.IdentityVerified,
                 Role = resident.Role,
                 RoomId = resident.RoomId,
                 RoomNumber = resident.Room?.RoomNumber,
@@ -378,7 +391,7 @@
             return true;
         }
 
-        public async Task<bool> UpdateResidentProfileAsync(int userId, string? address, string? emergencyContact, string? notes)
+        public async Task<bool> UpdateResidentProfileAsync(int userId, string? address, string? emergencyContact, string? notes, string? identityDocumentUrl)
         {
             var resident = await _context.Residents
                 .FirstOrDefaultAsync(r => r.UserId == userId);
@@ -388,6 +401,15 @@
             resident.Address = address;
             resident.EmergencyContact = emergencyContact;
             resident.Notes = notes;
+
+            if (!string.IsNullOrWhiteSpace(identityDocumentUrl))
+            {
+                resident.IdentityDocumentUrl = identityDocumentUrl;
+                // Nếu resident upload giấy tờ mới, reset trạng thái xác minh
+                resident.IdentityVerified = false;
+                resident.IdentityVerifiedAt = null;
+                resident.IdentityVerifiedByUserId = null;
+            }
 
             await _context.SaveChangesAsync();
             return true;

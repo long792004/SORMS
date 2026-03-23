@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -14,13 +14,13 @@ namespace SORMS.API.Models
         public int ResidentId { get; set; }
 
         [ForeignKey(nameof(ResidentId))]
-        public Resident Resident { get; set; }
+        public Resident Resident { get; set; } = default!;
 
         [Required]
         public int RoomId { get; set; }
 
         [ForeignKey(nameof(RoomId))]
-        public Room Room { get; set; }
+        public Room Room { get; set; } = default!;
 
         [Required]
         public DateTime RequestTime { get; set; } // Thời gian yêu cầu
@@ -66,7 +66,7 @@ namespace SORMS.API.Models
         public DateTime? CheckOutTime { get; set; } // Thời gian check-out thực tế
 
         [Required, MaxLength(50)]
-        public string Status { get; set; } // PendingCheckIn, CheckedIn, PendingCheckOut, CheckedOut, Rejected
+        public string Status { get; set; } = default!; // PendingCheckIn, CheckedIn, PendingCheckOut, CheckedOut, Rejected
 
         [MaxLength(500)]
         public string? RejectReason { get; set; } // Lý do từ chối
@@ -78,7 +78,12 @@ namespace SORMS.API.Models
         // public User? ApprovedByUser { get; set; }
 
         [Required, MaxLength(20)]
-        public string RequestType { get; set; } // CheckIn, CheckOut
+        public string RequestType { get; set; } = default!; // CheckIn, CheckOut
+
+        public int? ReservationId { get; set; }
+        
+        [ForeignKey(nameof(ReservationId))]
+        public Reservation? Reservation { get; set; }
 
         public Review? Review { get; set; }
     }
