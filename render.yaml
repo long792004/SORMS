@@ -66,6 +66,18 @@ services:
       - key: GeminiModel
         value: gemini-2.0-flash
 
+      - key: Cloudinary__CloudName
+        sync: false
+
+      - key: Cloudinary__ApiKey
+        sync: false
+
+      - key: Cloudinary__ApiSecret
+        sync: false
+
+      - key: Cloudinary__Folder
+        value: sorms/rooms
+
       - key: Smtp__Host
         value: smtp.gmail.com
 

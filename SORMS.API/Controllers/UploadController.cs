@@ -1,5 +1,9 @@
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using SORMS.API.Configs;
 
 namespace SORMS.API.Controllers
 {
@@ -7,17 +11,45 @@ namespace SORMS.API.Controllers
     [ApiController]
     public class UploadController : ControllerBase
     {
-        private readonly IWebHostEnvironment _env;
+        private readonly Cloudinary _cloudinary;
+        private readonly CloudinaryConfig _cloudinaryConfig;
+        private readonly ILogger<UploadController> _logger;
 
-        public UploadController(IWebHostEnvironment env)
+        public UploadController(IOptions<CloudinaryConfig> cloudinaryOptions, ILogger<UploadController> logger)
         {
-            _env = env;
+            _cloudinaryConfig = cloudinaryOptions.Value;
+            _logger = logger;
+
+            if (string.IsNullOrWhiteSpace(_cloudinaryConfig.CloudName) ||
+                string.IsNullOrWhiteSpace(_cloudinaryConfig.ApiKey) ||
+                string.IsNullOrWhiteSpace(_cloudinaryConfig.ApiSecret))
+            {
+                _cloudinary = null!;
+                return;
+            }
+
+            var account = new Account(
+                _cloudinaryConfig.CloudName,
+                _cloudinaryConfig.ApiKey,
+                _cloudinaryConfig.ApiSecret);
+
+            _cloudinary = new Cloudinary(account)
+            {
+                Api = { Secure = true }
+            };
         }
 
         [HttpPost("image")]
         [Authorize(Roles = "Admin,Staff,Resident")]
-        public async Task<IActionResult> UploadImage([FromForm] IFormFile file)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadImage(IFormFile file)
         {
+            if (_cloudinary == null)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    "Cloudinary is not configured. Please set Cloudinary credentials.");
+            }
+
             if (file == null || file.Length == 0)
                 return BadRequest("No file uploaded.");
 
@@ -29,25 +61,33 @@ namespace SORMS.API.Controllers
             if (file.Length > 5 * 1024 * 1024) // 5MB limit
                 return BadRequest("File size exceeds 5MB.");
 
-            var webRootPath = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
-            var uploadsFolder = Path.Combine(webRootPath, "images", "rooms");
-            
-            // Create directory if it doesn't exist
-            if (!Directory.Exists(uploadsFolder))
+            var publicId = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(file.FileName)}";
+            using var stream = file.OpenReadStream();
+
+            var uploadParams = new ImageUploadParams
             {
-                Directory.CreateDirectory(uploadsFolder);
+                File = new FileDescription(file.FileName, stream),
+                PublicId = publicId,
+                Folder = _cloudinaryConfig.Folder,
+                UseFilename = false,
+                UniqueFilename = false,
+                Overwrite = false
+            };
+
+            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+            if (uploadResult.Error != null)
+            {
+                _logger.LogError("Cloudinary upload failed: {Message}", uploadResult.Error.Message);
+                return StatusCode(StatusCodes.Status500InternalServerError, "Upload to Cloudinary failed.");
             }
 
-            var uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(file.FileName);
-            var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            var imageUrl = uploadResult.SecureUrl?.ToString();
+            if (string.IsNullOrWhiteSpace(imageUrl))
             {
-                await file.CopyToAsync(fileStream);
+                return StatusCode(StatusCodes.Status500InternalServerError, "Cloudinary did not return image URL.");
             }
 
-            // Return relative URL to the image
-            var imageUrl = $"/images/rooms/{uniqueFileName}";
             return Ok(new { ImageUrl = imageUrl });
         }
     }

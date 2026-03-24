@@ -23,6 +23,7 @@ using System.Text;
     builder.Services.Configure<JwtConfig>(builder.Configuration.GetSection("JwtConfig"));
     builder.Services.Configure<EmailConfig>(builder.Configuration.GetSection("EmailConfig"));
     builder.Services.Configure<AdminConfig>(builder.Configuration.GetSection("AdminAccount"));
+    builder.Services.Configure<CloudinaryConfig>(builder.Configuration.GetSection("Cloudinary"));
 
 // 2. Cấu hình DbContext: PostgreSQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
