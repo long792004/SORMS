@@ -5,7 +5,7 @@ import { OccupancyChart } from "@/components/charts/OccupancyChart";
 import { RevenueChart } from "@/components/charts/RevenueChart";
 import { Button } from "@/components/ui/Button";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
-import { useBroadcastNotification, useIndividualNotification, useMyNotifications, useSentNotificationHistory } from "@/hooks/useNotifications";
+import { useBroadcastNotification, useMyNotifications, useSentNotificationHistory } from "@/hooks/useNotifications";
 import { checkInApi } from "@/api/checkInApi";
 import { residentApi } from "@/api/residentApi";
 import { reviewApi } from "@/api/reviewApi";
@@ -773,20 +773,14 @@ export function AdminNotificationsPage() {
   const [message, setMessage] = useState("");
   const [title, setTitle] = useState("SORM Notice");
   const [targetRole, setTargetRole] = useState<"All" | "Resident" | "Staff">("All");
-  const [residentId, setResidentId] = useState("");
-  const [individualMessage, setIndividualMessage] = useState("");
-  const [individualError, setIndividualError] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
   const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
-  const [individualSuccess, setIndividualSuccess] = useState<string | null>(null);
   const [historyRoleFilter, setHistoryRoleFilter] = useState<"All" | "Resident" | "Staff">("All");
   const { data } = useMyNotifications();
   const { data: sentHistoryData } = useSentNotificationHistory();
   const broadcast = useBroadcastNotification();
-  const individual = useIndividualNotification();
   const notifications = useMemo(() => listOf(data), [data]);
   const sentHistory = useMemo(() => listOf(sentHistoryData), [sentHistoryData]);
-  const parsedResidentId = Number.parseInt(residentId.trim(), 10);
   const formatDateTime = (value?: string) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -797,36 +791,6 @@ export function AdminNotificationsPage() {
     if (historyRoleFilter === "All") return sentHistory.slice(0, 8);
     return sentHistory.filter((item: any) => String(item?.targetRole ?? "").toLowerCase() === historyRoleFilter.toLowerCase()).slice(0, 8);
   }, [sentHistory, historyRoleFilter]);
-
-  const sendIndividualNotification = () => {
-    if (!Number.isInteger(parsedResidentId) || parsedResidentId <= 0) {
-      setIndividualError("Resident ID phải là số nguyên dương.");
-      return;
-    }
-
-    if (!individualMessage.trim()) {
-      setIndividualError("Vui lòng nhập nội dung thông báo.");
-      return;
-    }
-
-    setIndividualError(null);
-    setIndividualSuccess(null);
-    individual.mutate(
-      { residentId: parsedResidentId, title: "Individual Notice", message: individualMessage.trim() },
-      {
-        onSuccess: () => {
-          setResidentId("");
-          setIndividualMessage("");
-          setIndividualError(null);
-          setIndividualSuccess("Đã gửi thông báo cá nhân thành công.");
-        },
-        onError: (error: any) => {
-          setIndividualError(getApiErrorMessage(error, "Không thể gửi thông báo cá nhân."));
-          setIndividualSuccess(null);
-        }
-      }
-    );
-  };
 
   const sendBroadcastNotification = () => {
     if (!message.trim()) {
@@ -863,15 +827,6 @@ export function AdminNotificationsPage() {
         </select>
         <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write broadcast message..." className="mt-3 min-h-28 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5" />
         <Button className="mt-3" onClick={sendBroadcastNotification} disabled={broadcast.isPending}>{broadcast.isPending ? "Sending..." : "Send Broadcast"}</Button>
-      </div>
-
-      <div className="glass-card rounded-xl p-4">
-        <h3 className="font-semibold">Individual Notification</h3>
-        {individualError ? <p className="mt-2 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{individualError}</p> : null}
-        {individualSuccess ? <p className="mt-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{individualSuccess}</p> : null}
-        <input value={residentId} onChange={(event) => setResidentId(event.target.value)} placeholder="Resident ID" className="mt-3 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5" />
-        <textarea value={individualMessage} onChange={(event) => setIndividualMessage(event.target.value)} placeholder="Write message for one resident..." className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-white/5" />
-        <Button className="mt-3" onClick={sendIndividualNotification} disabled={individual.isPending}>{individual.isPending ? "Sending..." : "Send Individual"}</Button>
       </div>
 
       <div className="glass-card rounded-xl p-4">
