@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, Send } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { chatbotApi } from "@/api/chatbotApi";
+import { roomApi } from "@/api/roomApi";
 
 interface ChatMessage {
   from: "user" | "bot";
@@ -9,6 +12,7 @@ interface ChatMessage {
 }
 
 export function ChatbotWidget() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,6 +21,37 @@ export function ChatbotWidget() {
   ]);
 
   const sessionId = useMemo(() => `chat-${Date.now()}`, []);
+
+  const { data: roomsData } = useQuery({
+    queryKey: ["chatbot", "rooms", "all"],
+    queryFn: async () => {
+      const response = await roomApi.getRooms();
+      return response.data?.data ?? response.data;
+    }
+  });
+
+  const roomNumberToIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const rooms = Array.isArray(roomsData) ? roomsData : [];
+    rooms.forEach((room: any) => {
+      const roomNumber = String(room?.roomNumber ?? "").trim();
+      const roomId = String(room?.id ?? room?.roomId ?? "").trim();
+      if (roomNumber && roomId) {
+        map.set(roomNumber, roomId);
+      }
+    });
+    return map;
+  }, [roomsData]);
+
+  const extractMentionedRoomNumbers = (text: string) => {
+    const roomNumbers = new Set<string>();
+    const matches = text.matchAll(/phòng\s+([a-zA-Z0-9-]+)/gi);
+    for (const match of matches) {
+      const roomNumber = String(match[1] ?? "").trim();
+      if (roomNumber) roomNumbers.add(roomNumber);
+    }
+    return Array.from(roomNumbers);
+  };
 
   const sendMessage = async () => {
     const trimmed = input.trim();
@@ -59,7 +94,27 @@ export function ChatbotWidget() {
                     message.from === "user" ? "ml-auto bg-primary/30" : "bg-white/10"
                   }`}
                 >
-                  {message.text}
+                  <p>{message.text}</p>
+                  {message.from === "bot" ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {extractMentionedRoomNumbers(message.text).map((roomNumber) => {
+                        const roomId = roomNumberToIdMap.get(roomNumber);
+                        if (!roomId) return null;
+                        return (
+                          <button
+                            key={`${index}-${roomNumber}`}
+                            className="rounded-lg border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20"
+                            onClick={() => {
+                              navigate(`/rooms/${roomId}`);
+                              setOpen(false);
+                            }}
+                          >
+                            Xem & đặt phòng {roomNumber}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

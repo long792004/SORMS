@@ -34,7 +34,7 @@ function getRoomTitle(room: any) {
 }
 
 function getRoomPrice(room: any) {
-  return Number(room?.price ?? room?.monthlyRent ?? 0);
+  return getDailyRate(room);
 }
 
 function getRoomRating(room: any) {
@@ -65,7 +65,7 @@ function getRoomCapacity(room: any) {
   return Number(room?.maxCapacity ?? 1);
 }
 
-function getNightlyRate(room: any) {
+function getDailyRate(room: any) {
   const monthly = Number(room?.price ?? room?.monthlyRent ?? 0);
   if (!Number.isFinite(monthly) || monthly <= 0) return 0;
   return Math.round(monthly / 30);
@@ -212,7 +212,7 @@ export function HomePage() {
             <RoomCard
               key={getRoomId(room)}
               title={getRoomTitle(room)}
-              price={`${getRoomPrice(room).toLocaleString("vi-VN")} VND / month`}
+              price={`${getRoomPrice(room).toLocaleString("vi-VN")} VND / day`}
               rating={getRoomRating(room).toFixed(1)}
               reviewCount={getReviewCount(room)}
               location={room.location ?? "SORM Residence"}
@@ -256,7 +256,7 @@ export function HomePage() {
 export function RoomListPage() {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const [maxPrice, setMaxPrice] = useState(10000000);
+  const [maxPrice, setMaxPrice] = useState(500000);
   const [minRating, setMinRating] = useState(0);
   const [minGuests, setMinGuests] = useState(1);
   const [roomType, setRoomType] = useState("all");
@@ -291,7 +291,7 @@ export function RoomListPage() {
   const rooms = useMemo(() => toRoomList(rawData), [rawData]);
 
   const filtered = rooms.filter((room: any) => {
-    if (Number(room.price ?? room.monthlyRent ?? 0) > maxPrice) return false;
+    if (getDailyRate(room) > maxPrice) return false;
     if (Number(room.averageRating ?? 0) < minRating) return false;
     if (getRoomCapacity(room) < minGuests) return false;
     if (roomType !== "all" && getRoomType(room).toLowerCase() !== roomType.toLowerCase()) return false;
@@ -364,8 +364,8 @@ export function RoomListPage() {
         {filterCheckIn && filterCheckOut && filterCheckOut <= filterCheckIn ? (
           <p className="rounded-lg bg-rose-500/10 p-2 text-center text-[11px] text-rose-400 border border-rose-500/20">⚠️ Ngày trả phòng phải sau ngày nhận phòng.</p>
         ) : null}
-        <label className="text-sm text-slate-600 dark:text-slate-300">Price up to: {maxPrice.toLocaleString("vi-VN")} VND</label>
-        <input type="range" min={1000000} max={10000000} step={100000} value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} className="w-full" />
+        <label className="text-sm text-slate-600 dark:text-slate-300">Price/day up to: {maxPrice.toLocaleString("vi-VN")} VND</label>
+        <input type="range" min={50000} max={1000000} step={10000} value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} className="w-full" />
         <label className="text-sm text-slate-600 dark:text-slate-300">Guests</label>
         <input type="number" min={1} value={minGuests} onChange={(event) => { setMinGuests(Math.max(1, Number(event.target.value) || 1)); setPage(1); }} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-white/5" />
         <label className="text-sm text-slate-600 dark:text-slate-300">Min rating</label>
@@ -390,7 +390,7 @@ export function RoomListPage() {
             <RoomCard
               key={getRoomId(room)}
               title={`Room ${room?.roomNumber ?? getRoomTitle(room)} • ${getRoomType(room)}`}
-              price={`${getNightlyRate(room).toLocaleString("vi-VN")} VND / night`}
+              price={`${getDailyRate(room).toLocaleString("vi-VN")} VND / day`}
               rating={getRoomRating(room).toFixed(1)}
               reviewCount={getReviewCount(room)}
               location={`${getLocationText(room)}${getDistanceLabel(room) ? ` • ${getDistanceLabel(room)}` : ""}`}
@@ -474,10 +474,9 @@ export function RoomDetailPage() {
           ? "Phòng khả dụng cho khoảng ngày bạn chọn."
           : "Phòng đã được booking trước đó trong khoảng ngày này.";
 
-  const roomPrice = Number(room?.price ?? room?.monthlyRent ?? 0);
-  const nightlyRate = getNightlyRate(room);
+  const dailyRate = getDailyRate(room);
   const stayNights = countNights(checkIn, checkOut);
-  const estimatedRoomCost = nightlyRate * stayNights;
+  const estimatedRoomCost = dailyRate * stayNights;
   const estimatedTax = Math.round(estimatedRoomCost * 0.1);
   const estimatedServiceFee = Math.round(estimatedRoomCost * 0.05);
   const estimatedTotal = estimatedRoomCost + estimatedTax + estimatedServiceFee;
@@ -489,7 +488,7 @@ export function RoomDetailPage() {
     houseRules: "Không hút thuốc trong phòng, giữ yên tĩnh sau 22:00."
   };
   const canProceedBooking = isDateRangeValid && isCurrentRoomAvailable && isTimeValid;
-  const bookingTarget = `/checkout?roomId=${id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}&roomPrice=${roomPrice}&roomNumber=${encodeURIComponent(String(room?.roomNumber ?? id))}&checkInTime=${encodeURIComponent(checkInTime)}&checkOutTime=${encodeURIComponent(checkOutTime)}`;
+  const bookingTarget = `/checkout?roomId=${id}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}&roomPrice=${dailyRate}&roomNumber=${encodeURIComponent(String(room?.roomNumber ?? id))}&checkInTime=${encodeURIComponent(checkInTime)}&checkOutTime=${encodeURIComponent(checkOutTime)}`;
   const alternativeRooms = isDateRangeValid
     ? availableRooms
         .filter((item: any) => String(item.id ?? item.roomId ?? item.roomNumber) !== String(id))
@@ -508,7 +507,7 @@ export function RoomDetailPage() {
               Phòng đang bảo trì. Dự kiến sẽ trống vào ngày: {new Date(room.maintenanceEndDate).toLocaleDateString("vi-VN")}
             </p>
           )}
-          <p className="mt-2 text-xl font-semibold text-primary">{nightlyRate.toLocaleString("vi-VN")} VND/night</p>
+          <p className="mt-2 text-xl font-semibold text-primary">{dailyRate.toLocaleString("vi-VN")} VND/day</p>
           <div className="mt-2"><RatingStars rating={Number(room?.averageRating ?? 0)} /></div>
           <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
             <p><span className="font-semibold">Hotel:</span> {room?.hotelName ?? "SORM Residence"}</p>
@@ -532,7 +531,7 @@ export function RoomDetailPage() {
           </div>
           <div className="mt-4 grid gap-2 rounded-xl border border-slate-200 p-4 text-sm dark:border-white/10">
             <h3 className="text-base font-semibold">Estimated Price</h3>
-            <p>Nightly rate: {nightlyRate.toLocaleString("vi-VN")} VND</p>
+            <p>Daily rate: {dailyRate.toLocaleString("vi-VN")} VND</p>
             <p>Nights: {stayNights || "-"}</p>
             <p>Room subtotal: {estimatedRoomCost.toLocaleString("vi-VN")} VND</p>
             <p>Tax (10%): {estimatedTax.toLocaleString("vi-VN")} VND</p>
@@ -631,7 +630,7 @@ export function RoomDetailPage() {
           {!isTimeValid && isDateRangeValid && (
             <p className="text-xs text-rose-400">⚠️ Vui lòng chọn giờ check-in/out phù hợp với quy định phòng.</p>
           )}
-          <p className="text-xs text-slate-500 dark:text-slate-400">Giá phòng: {roomPrice.toLocaleString("vi-VN")} VND/tháng</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Giá phòng: {dailyRate.toLocaleString("vi-VN")} VND/ngày</p>
 
           <Tooltip title={!isAuthenticated ? "Please log in to book this room" : ""} arrow placement="top">
             <span>
@@ -660,12 +659,12 @@ export function RoomDetailPage() {
                 <div className="mt-2 space-y-2">
                   {alternativeRooms.map((alt: any, index) => {
                     const altId = alt.id ?? alt.roomId ?? alt.roomNumber;
-                    const altPrice = Number(alt.price ?? alt.monthlyRent ?? 0);
+                    const altPrice = getDailyRate(alt);
                     return (
                       <div key={altId ?? index} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
                         <div>
                           <p className="text-slate-100">Room {alt.roomNumber ?? altId}</p>
-                          <p className="text-[11px] text-slate-300">{altPrice.toLocaleString("vi-VN")} VND/tháng</p>
+                          <p className="text-[11px] text-slate-300">{altPrice.toLocaleString("vi-VN")} VND/ngày</p>
                         </div>
                         <Button
                           variant="ghost"
@@ -752,22 +751,27 @@ export function SearchResultsPage() {
   const locationQuery = searchParams.get("location") ?? "";
   const checkInQuery = searchParams.get("checkIn") ?? "";
   const checkOutQuery = searchParams.get("checkOut") ?? "";
+  const hasDateFilter = Boolean(checkInQuery && checkOutQuery && checkOutQuery > checkInQuery);
   const guestsQuery = Math.max(1, Number(searchParams.get("guests") ?? "1"));
-  const [maxPrice, setMaxPrice] = useState(10000000);
+  const [maxPrice, setMaxPrice] = useState(500000);
   const [minRating, setMinRating] = useState(0);
   const [roomType, setRoomType] = useState("all");
   const { data } = useQuery({
-    queryKey: ["rooms", "all", "search"],
+    queryKey: ["rooms", "search", checkInQuery, checkOutQuery],
     queryFn: async () => {
-      const response = await roomApi.getRooms();
+      const response = hasDateFilter
+        ? await roomApi.getAvailableRooms(checkInQuery, checkOutQuery)
+        : await roomApi.getRooms();
       return response.data?.data ?? response.data;
     }
   });
   const rooms = useMemo(() => toRoomList(data), [data]);
   const filteredRooms = useMemo(() => {
     return rooms.filter((room: any) => {
+      const status = String(room.status ?? "").toLowerCase();
+      if (status && status !== "available") return false;
       if (locationQuery.trim() && !getLocationText(room).toLowerCase().includes(locationQuery.toLowerCase())) return false;
-      if (Number(room.price ?? room.monthlyRent ?? 0) > maxPrice) return false;
+      if (getDailyRate(room) > maxPrice) return false;
       if (Number(room.averageRating ?? 0) < minRating) return false;
       if (getRoomCapacity(room) < guestsQuery) return false;
       if (roomType !== "all" && getRoomType(room).toLowerCase() !== roomType.toLowerCase()) return false;
@@ -789,7 +793,9 @@ export function SearchResultsPage() {
       return;
     }
 
-    const target = `/rooms/${roomId}`;
+    const target = hasDateFilter
+      ? `/rooms/${roomId}?checkIn=${encodeURIComponent(checkInQuery)}&checkOut=${encodeURIComponent(checkOutQuery)}&guests=${guestsQuery}`
+      : `/rooms/${roomId}`;
     if (!isAuthenticated) {
       navigate("/login", { state: { from: target } });
       return;
@@ -808,8 +814,8 @@ export function SearchResultsPage() {
       </div>
       <div className="grid gap-3 rounded-xl border border-slate-200 p-4 dark:border-white/10 md:grid-cols-3">
         <div>
-          <label className="text-xs text-slate-500 dark:text-slate-400">Max price</label>
-          <input type="range" min={1000000} max={10000000} step={100000} value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} className="w-full" />
+          <label className="text-xs text-slate-500 dark:text-slate-400">Max price/day</label>
+          <input type="range" min={50000} max={1000000} step={10000} value={maxPrice} onChange={(event) => setMaxPrice(Number(event.target.value))} className="w-full" />
           <p className="text-xs text-slate-500 dark:text-slate-400">{maxPrice.toLocaleString("vi-VN")} VND</p>
         </div>
         <div>
@@ -835,7 +841,7 @@ export function SearchResultsPage() {
           <RoomCard
             key={getRoomId(room)}
             title={`Room ${room?.roomNumber ?? getRoomTitle(room)} • ${getRoomType(room)}`}
-            price={`${getNightlyRate(room).toLocaleString("vi-VN")} VND / night`}
+            price={`${getDailyRate(room).toLocaleString("vi-VN")} VND / day`}
             rating={getRoomRating(room).toFixed(1)}
             reviewCount={getReviewCount(room)}
             location={`${getLocationText(room)}${getDistanceLabel(room) ? ` • ${getDistanceLabel(room)}` : ""}`}

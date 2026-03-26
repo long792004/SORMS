@@ -22,6 +22,7 @@ const residentItems: NavItem[] = [
 const staffItems: NavItem[] = [
   { to: "/staff/dashboard", label: "Dashboard" },
   { to: "/staff/checkin-checkout", label: "Check-in / Out" },
+  { to: "/staff/history-booking", label: "History Booking" },
   { to: "/staff/residents", label: "Residents" },
   { to: "/staff/rooms", label: "Rooms" },
   { to: "/staff/service-requests", label: "Service Requests" },
@@ -32,6 +33,7 @@ const staffItems: NavItem[] = [
 const adminItems: NavItem[] = [
   { to: "/admin/dashboard", label: "Dashboard" },
   { to: "/admin/checkin-checkout", label: "Check-in / Out" },
+  { to: "/admin/history-booking", label: "History Booking" },
   { to: "/admin/residents", label: "Residents" },
   { to: "/admin/staff", label: "Staff" },
   { to: "/admin/rooms", label: "Rooms" },

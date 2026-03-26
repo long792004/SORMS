@@ -18,6 +18,16 @@ const genderOptions = ["Male", "Female", "Other"];
 const roomTypeOptions = ["Single", "Double", "Triple", "Suite"];
 const roomStatusOptions = ["Available", "Occupied", "Maintenance"];
 const unwrap = (response: any) => response.data?.data ?? response.data;
+const toDailyRate = (value: unknown) => {
+  const monthly = Number(value ?? 0);
+  if (!Number.isFinite(monthly) || monthly <= 0) return 0;
+  return Math.round(monthly / 30);
+};
+const toMonthlyRate = (value: unknown) => {
+  const daily = Number(value ?? 0);
+  if (!Number.isFinite(daily) || daily <= 0) return 0;
+  return Math.round(daily * 30);
+};
 const getApiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
   if (typeof data === "string") {
@@ -60,6 +70,7 @@ export function StaffDashboardPage() {
 export function StaffCheckInOutPage() {
   const queryClient = useQueryClient();
   const [rejectReason, setRejectReason] = useState("Không đủ điều kiện");
+  const [actionNotice, setActionNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const { data: pendingCheckIn } = useQuery({
     queryKey: ["staff", "checkin", "pending-checkin"],
@@ -123,25 +134,71 @@ export function StaffCheckInOutPage() {
 
   const approveCheckIn = useMutation({
     mutationFn: (requestId: number) => checkInApi.approveCheckIn({ requestId, isApproved: true, rejectReason: null }),
-    onSuccess: () => {
+    onSuccess: (response: any) => {
+      setActionNotice({
+        type: "success",
+        message: response?.data?.message ?? "Đã phê duyệt yêu cầu check-in thành công."
+      });
       queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] });
       queryClient.invalidateQueries({ queryKey: ["staff", "checkin", "invoices"] });
+    },
+    onError: (error: any) => {
+      setActionNotice({
+        type: "error",
+        message: getApiErrorMessage(error, "Không thể phê duyệt check-in. Vui lòng kiểm tra điều kiện thời gian, CCCD và trạng thái thanh toán.")
+      });
     }
   });
 
   const rejectCheckIn = useMutation({
     mutationFn: (requestId: number) => checkInApi.approveCheckIn({ requestId, isApproved: false, rejectReason }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] })
+    onSuccess: (response: any) => {
+      setActionNotice({
+        type: "success",
+        message: response?.data?.message ?? "Đã từ chối yêu cầu check-in."
+      });
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] });
+    },
+    onError: (error: any) => {
+      setActionNotice({
+        type: "error",
+        message: getApiErrorMessage(error, "Không thể từ chối yêu cầu check-in.")
+      });
+    }
   });
 
   const approveCheckOut = useMutation({
     mutationFn: (requestId: number) => checkInApi.approveCheckOut({ requestId, isApproved: true, rejectReason: null }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] })
+    onSuccess: (response: any) => {
+      setActionNotice({
+        type: "success",
+        message: response?.data?.message ?? "Đã phê duyệt yêu cầu check-out."
+      });
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] });
+    },
+    onError: (error: any) => {
+      setActionNotice({
+        type: "error",
+        message: getApiErrorMessage(error, "Không thể phê duyệt check-out.")
+      });
+    }
   });
 
   const rejectCheckOut = useMutation({
     mutationFn: (requestId: number) => checkInApi.approveCheckOut({ requestId, isApproved: false, rejectReason }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] })
+    onSuccess: (response: any) => {
+      setActionNotice({
+        type: "success",
+        message: response?.data?.message ?? "Đã từ chối yêu cầu check-out."
+      });
+      queryClient.invalidateQueries({ queryKey: ["staff", "checkin"] });
+    },
+    onError: (error: any) => {
+      setActionNotice({
+        type: "error",
+        message: getApiErrorMessage(error, "Không thể từ chối yêu cầu check-out.")
+      });
+    }
   });
 
   const createInspection = useMutation({
@@ -186,6 +243,11 @@ export function StaffCheckInOutPage() {
     <section className="page-shell space-y-5">
       <h1 className="section-title">Check-in / Check-out Approval</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400">Chỉ phê duyệt check-in khi invoice đã được thanh toán (Paid).</p>
+      {actionNotice ? (
+        <div className={`rounded-xl border px-3 py-2 text-sm ${actionNotice.type === "success" ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200" : "border-rose-400/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"}`}>
+          {actionNotice.message}
+        </div>
+      ) : null}
 
       <div className="glass-card rounded-xl p-4">
         <h3 className="font-semibold">Pending Check-in Requests</h3>
@@ -205,6 +267,11 @@ export function StaffCheckInOutPage() {
                 <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
                 <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
                 <p className="muted-text">{String(item.expectedCheckInDate ?? "").slice(0, 10)} → {String(item.expectedCheckOutDate ?? "").slice(0, 10)}</p>
+                <p className="muted-text">Check-in time: {formatDateTime(item.expectedCheckInDate)}</p>
+                <p className="muted-text">Check-out time: {formatDateTime(item.expectedCheckOutDate)}</p>
+                <p className="muted-text">Booker: {item.bookerFullName ?? "-"} • {item.bookerPhone ?? "-"} • CCCD: {item.bookerIdentityNumber ?? "-"}</p>
+                <p className="muted-text">Residents: {item.numberOfResidents ?? "-"}</p>
+                <p className="muted-text">Guest list: {item.guestList ? String(item.guestList) : "-"}</p>
                 <p className={`mt-1 ${paid ? "text-emerald-400" : "text-amber-400"}`}>Invoice: {invoice ? `#${invoice.id} - ${invoice.status}` : "Chưa tìm thấy invoice"}</p>
                 <p className={`mt-1 ${identityVerified ? "text-emerald-400" : "text-rose-300"}`}>
                   CCCD verification: {identityVerified ? "Verified" : "Not verified"}
@@ -246,6 +313,10 @@ export function StaffCheckInOutPage() {
             <article key={item.id ?? index} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
               <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
               <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
+              <p className="muted-text">Booked stay: {formatDateTime(item.expectedCheckInDate)} → {formatDateTime(item.expectedCheckOutDate)}</p>
+              <p className="muted-text">Booker: {item.bookerFullName ?? "-"} • {item.bookerPhone ?? "-"}</p>
+              <p className="muted-text">Residents: {item.numberOfResidents ?? "-"}</p>
+              <p className="muted-text">Guest list: {item.guestList ? String(item.guestList) : "-"}</p>
               <p className={`mt-1 ${inspectedCheckInRecordIds.has(Number(item.id)) ? "text-emerald-400" : "text-amber-300"}`}>
                 Inspection: {inspectedCheckInRecordIds.has(Number(item.id)) ? "Completed" : "Missing"}
               </p>
@@ -261,6 +332,52 @@ export function StaffCheckInOutPage() {
             </article>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+export function StaffBookingHistoryPage() {
+  const { data: allBookingsData, isLoading } = useQuery({
+    queryKey: ["staff", "checkin", "history-bookings"],
+    queryFn: async () => unwrap(await checkInApi.all())
+  });
+
+  const bookings = useMemo(() => {
+    return listOf(allBookingsData).sort((a: any, b: any) => {
+      const aTime = new Date(a.requestTime ?? 0).getTime();
+      const bTime = new Date(b.requestTime ?? 0).getTime();
+      return bTime - aTime;
+    });
+  }, [allBookingsData]);
+
+  return (
+    <section className="page-shell space-y-4">
+      <h1 className="section-title">History Booking</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400">Lưu toàn bộ lịch sử đặt phòng của khách hàng (mọi trạng thái).</p>
+      {isLoading ? <LoadingSkeleton lines={5} /> : null}
+      {bookings.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Chưa có lịch sử booking.</p> : null}
+
+      <div className="space-y-3">
+        {bookings.map((item: any, index) => (
+          <article key={item.id ?? index} className="glass-card rounded-xl border border-slate-200 p-4 text-sm dark:border-white/10">
+            <p className="font-semibold">Booking #{item.id} • Room {item.roomNumber ?? item.roomId}</p>
+            <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
+            <p className="muted-text">Status: {item.bookingStatus ?? item.status ?? "-"}</p>
+            <p className="muted-text">Request time: {formatDateTime(item.requestTime)}</p>
+            <p className="muted-text">Expected check-in: {formatDateTime(item.expectedCheckInDate)}</p>
+            <p className="muted-text">Expected check-out: {formatDateTime(item.expectedCheckOutDate)}</p>
+            <p className="muted-text">Actual check-in: {formatDateTime(item.checkInTime)}</p>
+            <p className="muted-text">Actual check-out: {formatDateTime(item.checkOutTime)}</p>
+            <p className="muted-text">Booker: {item.bookerFullName ?? "-"} • {item.bookerEmail ?? "-"} • {item.bookerPhone ?? "-"}</p>
+            <p className="muted-text">Booker CCCD: {item.bookerIdentityNumber ?? "-"}</p>
+            <p className="muted-text">Residents: {item.numberOfResidents ?? "-"}</p>
+            <p className="muted-text">Guest list: {item.guestList ? String(item.guestList) : "-"}</p>
+            <p className="muted-text">Bed preference: {item.bedPreference ?? "-"} • Smoking: {item.smokingPreference ?? "-"}</p>
+            <p className="muted-text">Approved by: {item.approvedByName ?? item.approvedBy ?? "-"} • Approved time: {formatDateTime(item.approvedTime)}</p>
+            {item.rejectReason ? <p className="mt-1 text-rose-700 dark:text-rose-300">Reject reason: {item.rejectReason}</p> : null}
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -426,7 +543,7 @@ export function StaffRoomsPage() {
     roomNumber: "",
     roomType: "Single",
     floor: "1",
-    monthlyRent: "3000000",
+    monthlyRent: "100000",
     area: "20",
     maxCapacity: "1",
     status: "Available",
@@ -463,7 +580,7 @@ export function StaffRoomsPage() {
         roomType: roomForm.roomType,
         type: roomForm.roomType,
         floor: Number(roomForm.floor),
-        monthlyRent: Number(roomForm.monthlyRent),
+        monthlyRent: toMonthlyRate(roomForm.monthlyRent),
         area: Number(roomForm.area),
         maxCapacity: Number(roomForm.maxCapacity),
         status: roomForm.status,
@@ -480,7 +597,7 @@ export function StaffRoomsPage() {
         roomNumber: "",
         roomType: "Single",
         floor: "1",
-        monthlyRent: "3000000",
+        monthlyRent: "100000",
         area: "20",
         maxCapacity: "1",
         status: "Available",
@@ -523,8 +640,8 @@ export function StaffRoomsPage() {
             <input value={roomForm.floor} onChange={(event) => setRoomForm((prev) => ({ ...prev, floor: event.target.value }))} placeholder="1" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-500">Giá thuê (Monthly rent)</label>
-            <input value={roomForm.monthlyRent} onChange={(event) => setRoomForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="3,000,000" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+            <label className="text-xs font-medium text-slate-500">Giá thuê/ngày (Daily rate)</label>
+            <input value={roomForm.monthlyRent} onChange={(event) => setRoomForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="100,000" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">Diện tích (Area m²)</label>
@@ -565,7 +682,7 @@ export function StaffRoomsPage() {
           <article key={room.id ?? index} className="glass-card rounded-xl p-3 text-sm">
             {getRoomImageUrls(room)[0] ? <img src={resolveMediaUrl(getRoomImageUrls(room)[0])} alt={`Room ${room.roomNumber}`} className="mb-3 h-32 w-full rounded-lg object-cover" /> : null}
             <p className="font-semibold">Room {room.roomNumber}</p>
-            <p className="muted-text">{room.roomType ?? room.type} • Floor {room.floor ?? "-"} • {Number(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND</p>
+            <p className="muted-text">{room.roomType ?? room.type} • Floor {room.floor ?? "-"} • {toDailyRate(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND/ngày</p>
             <p className="muted-text">
               Status: <span className={room.status === "Maintenance" ? "text-amber-500 font-medium" : ""}>{room.status ?? "-"}</span> 
               {room.status === "Maintenance" && room.maintenanceEndDate && ` • Dự kiến xong: ${formatDateTime(room.maintenanceEndDate)}`}

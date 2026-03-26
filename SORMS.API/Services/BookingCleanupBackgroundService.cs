@@ -7,6 +7,7 @@ namespace SORMS.API.Services
 {
     public class BookingManagementBackgroundService : BackgroundService
     {
+        private const int BookingHoldMinutes = 15;
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<BookingManagementBackgroundService> _logger;
 
@@ -32,6 +33,7 @@ namespace SORMS.API.Services
                     await AutoCheckOutExpiredStaysAsync(stoppingToken);
                     await AutoReleaseMaintenanceRoomsAsync(stoppingToken);
                     await SendCheckInRemindersAsync(stoppingToken);
+                    await SendCheckOutRemindersAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -83,7 +85,7 @@ namespace SORMS.API.Services
 
                     if (holdExpiresAt.HasValue)
                     {
-                        var holdStartedAt = holdExpiresAt.Value.AddMinutes(-6);
+                        var holdStartedAt = holdExpiresAt.Value.AddMinutes(-BookingHoldMinutes);
                         var pendingInvoice = await dbContext.Invoices
                             .Where(i => i.RoomId == room.Id
                                         && i.Status == "Pending"
@@ -267,6 +269,58 @@ namespace SORMS.API.Services
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation("Sent {Count} check-in reminder(s).", sentCount);
+            }
+        }
+
+        private async Task SendCheckOutRemindersAsync(CancellationToken cancellationToken)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SormsDbContext>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var now = DateTime.UtcNow;
+            var in24h = now.AddHours(24);
+            var in2h = now.AddHours(2);
+
+            var activeStays = await dbContext.CheckInRecords
+                .Include(r => r.Room)
+                .Where(r => (r.Status == "CheckedIn" || r.Status == "PendingCheckOut")
+                         && r.ExpectedCheckOutDate > now
+                         && r.ExpectedCheckOutDate <= in24h)
+                .ToListAsync(cancellationToken);
+
+            var sentCount = 0;
+            foreach (var record in activeStays)
+            {
+                try
+                {
+                    var template = record.ExpectedCheckOutDate <= in2h
+                        ? $"⏰ Nhắc nhở check-out: Chỉ còn dưới 2 giờ nữa đến giờ check-out phòng {record.Room?.RoomNumber}. CHECKOUT_REMINDER_2H:{record.Id}"
+                        : $"⏰ Nhắc nhở check-out: Trong 24 giờ tới bạn cần check-out phòng {record.Room?.RoomNumber} lúc {record.ExpectedCheckOutDate:dd/MM/yyyy HH:mm}. CHECKOUT_REMINDER_24H:{record.Id}";
+
+                    var duplicate = await dbContext.Notifications
+                        .AnyAsync(n => n.ResidentId == record.ResidentId && n.Message == template, cancellationToken);
+
+                    if (duplicate) continue;
+
+                    await notificationService.CreateNotificationAsync(new NotificationDto
+                    {
+                        ResidentId = record.ResidentId,
+                        Message = template,
+                        CreatedAt = now,
+                        IsRead = false
+                    });
+
+                    sentCount++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send check-out reminder for check-in record {RecordId}", record.Id);
+                }
+            }
+
+            if (sentCount > 0)
+            {
+                _logger.LogInformation("Sent {Count} check-out reminder(s).", sentCount);
             }
         }
     }

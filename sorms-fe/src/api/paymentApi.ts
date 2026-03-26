@@ -8,8 +8,8 @@ export const paymentApi = {
   deleteInvoice: (invoiceId: string | number) => api.delete(`/Payment/delete/${invoiceId}`),
   applyVoucher: (invoiceId: string | number, voucherCode: string) =>
     api.post(`/Payment/invoice/${invoiceId}/apply-voucher`, { voucherCode }),
-  createPaymentLink: (invoiceId: string | number, payload: { returnUrl?: string; cancelUrl?: string }) =>
-    api.post(`/Payment/create-payment-link/${invoiceId}`, payload),
+  createPaymentLink: (invoiceId: string | number, payload?: { returnUrl?: string; cancelUrl?: string }) =>
+    api.post(`/Payment/create-payment-link/${invoiceId}`, payload ?? {}),
   requestHotelPayment: (invoiceId: string | number) => api.post(`/Payment/payment-at-hotel/${invoiceId}`),
   markInvoicePaid: (invoiceId: string | number) => api.post(`/Payment/mark-paid/${invoiceId}`),
   getPaymentStatus: (invoiceId: string | number) => api.get(`/Payment/payment-status/${invoiceId}`),

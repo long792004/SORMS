@@ -10,6 +10,7 @@ namespace SORMS.API.Services
     {
         private readonly SormsDbContext _context;
         private readonly INotificationService _notificationService;
+        private const int BookingHoldMinutes = 15;
 
         public CheckInService(SormsDbContext context, INotificationService notificationService)
         {
@@ -24,17 +25,34 @@ namespace SORMS.API.Services
             var requestedCheckOut = NormalizeUtcDate(request.CheckOutDate);
             var numberOfNights = (requestedCheckOut - requestedCheckIn).Days;
             
+            // Lấy thông tin phòng trước để lấy khung giờ mặc định
+            var roomId = request.RoomId;
+            var room = await _context.Rooms.FindAsync(roomId);
+            if (room == null)
+                throw new Exception("Phòng không tồn tại");
+
             TimeSpan? parsedCheckInTime = null;
             if (!string.IsNullOrEmpty(request.CheckInTime) && TimeSpan.TryParse(request.CheckInTime, out var inTs))
             {
                 parsedCheckInTime = inTs;
                 requestedCheckIn = requestedCheckIn.Add(inTs);
             }
+            else
+            {
+                // Mặc định thiết lập đúng khung giờ quy định để không bị overlap
+                requestedCheckIn = requestedCheckIn.AddHours(room.CheckInFromHour > 0 ? room.CheckInFromHour : 14);
+            }
+
             TimeSpan? parsedCheckOutTime = null;
             if (!string.IsNullOrEmpty(request.CheckOutTime) && TimeSpan.TryParse(request.CheckOutTime, out var outTs))
             {
                 parsedCheckOutTime = outTs;
                 requestedCheckOut = requestedCheckOut.Add(outTs);
+            }
+            else
+            {
+                // Mặc định thiết lập đúng khung giờ quy định để không bị overlap
+                requestedCheckOut = requestedCheckOut.AddHours(room.CheckOutByHour > 0 ? room.CheckOutByHour : 12);
             }
 
             var numberOfResidents = Math.Max(1, request.NumberOfResidents);
@@ -70,11 +88,7 @@ namespace SORMS.API.Services
             if (residentOverlap)
                 throw new Exception("Bạn đã có booking trùng trong khoảng thời gian này.");
 
-            // Kiểm tra phòng có tồn tại
-            var roomId = request.RoomId;
-            var room = await _context.Rooms.FindAsync(roomId);
-            if (room == null)
-                throw new Exception("Phòng không tồn tại");
+            // Phòng đã được load và kiểm tra từ đầu hàm
 
             if (parsedCheckInTime.HasValue && parsedCheckInTime.Value.Hours < room.CheckInFromHour)
             {
@@ -182,6 +196,10 @@ namespace SORMS.API.Services
 
             if (!skipInvoice)
             {
+                var holdExpiresAt = DateTime.UtcNow.AddMinutes(BookingHoldMinutes);
+                room.Status = "OnHold";
+                room.HoldExpiresAt = holdExpiresAt;
+
                 var openInvoices = await _context.Invoices
                     .Where(i => i.ResidentId == residentId &&
                                 i.RoomId == roomId &&
@@ -199,11 +217,14 @@ namespace SORMS.API.Services
                     RoomId = roomId,
                     Amount = dailyRate * numberOfNights,
                     DiscountAmount = 0,
-                    TotalAmount = dailyRate * numberOfNights,
+                    TotalAmount = (dailyRate * numberOfNights) * 1.15m,
                     PaymentMethod = "PayOS",
                     Status = "Pending",
                     Description = $"Booking fee for room {room.RoomNumber}: {numberOfNights} night(s) x {dailyRate:N0}/day",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    BookingCheckInDate = requestedCheckIn,
+                    BookingCheckOutDate = requestedCheckOut,
+                    BookingNumberOfResidents = numberOfResidents
                 };
                 
                 _context.Invoices.Add(invoice);
@@ -227,12 +248,13 @@ namespace SORMS.API.Services
 
         private static decimal ResolveDailyRate(Room room, RoomPricingConfig? pricing)
         {
-            if (pricing?.MonthlyRent > 0)
+            var monthlyRent = pricing?.MonthlyRent > 0 ? pricing.MonthlyRent : room.MonthlyRent;
+            if (monthlyRent <= 0)
             {
-                return pricing.MonthlyRent;
+                return 0;
             }
 
-            return room.MonthlyRent;
+            return Math.Round(monthlyRent / 30m, 0, MidpointRounding.AwayFromZero);
         }
 
         // Resident tạo yêu cầu check-out khỏi phòng
@@ -319,6 +341,12 @@ namespace SORMS.API.Services
 
             if (isApproved)
             {
+                if (DateTime.UtcNow < record.ExpectedCheckInDate)
+                    throw new Exception($"Chưa đến thời gian check-in đã đặt ({record.ExpectedCheckInDate:dd/MM/yyyy HH:mm}).");
+
+                if (DateTime.UtcNow > record.ExpectedCheckOutDate)
+                    throw new Exception("Đã quá thời gian lưu trú đã đặt, không thể check-in.");
+
                 if (!record.Resident.IdentityVerified)
                     throw new Exception("Cư dân chưa hoàn tất xác minh CCCD. Không thể phê duyệt check-in.");
 
