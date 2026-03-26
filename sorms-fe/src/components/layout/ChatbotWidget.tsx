@@ -80,18 +80,20 @@ export function ChatbotWidget() {
             initial={{ opacity: 0, y: 12, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.95 }}
-            className="glass-card mb-3 h-[460px] w-[340px] rounded-2xl p-3"
+            className="glass-card mb-3 h-[480px] w-[340px] rounded-2xl border border-white/20 p-3"
           >
-            <div className="mb-3 border-b border-white/10 pb-2">
-              <p className="font-semibold">SORM AI Consultant</p>
-              <p className="text-xs text-slate-400">Room search • amenities • pricing • reviews</p>
+            <div className="mb-3 rounded-xl border border-slate-200/80 bg-white/75 px-3 py-2 dark:border-white/10 dark:bg-white/5">
+              <p className="font-semibold text-slate-900 dark:text-slate-100">SORM AI Consultant</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Room search • amenities • pricing • reviews</p>
             </div>
-            <div className="mb-3 h-[330px] space-y-2 overflow-auto pr-1">
+            <div className="mb-3 h-[342px] space-y-2 overflow-auto pr-1">
               {messages.map((message, index) => (
                 <div
                   key={`${message.from}-${index}`}
-                  className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${
-                    message.from === "user" ? "ml-auto bg-primary/30" : "bg-white/10"
+                  className={`max-w-[92%] rounded-xl border px-3 py-2 text-sm ${
+                    message.from === "user"
+                      ? "ml-auto border-primary/40 bg-primary/10 text-slate-800 dark:text-slate-100"
+                      : "border-slate-200/80 bg-white/80 text-slate-800 dark:border-white/10 dark:bg-white/10 dark:text-slate-100"
                   }`}
                 >
                   <p>{message.text}</p>
@@ -103,7 +105,7 @@ export function ChatbotWidget() {
                         return (
                           <button
                             key={`${index}-${roomNumber}`}
-                            className="rounded-lg border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20"
+                            className="rounded-lg border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary transition hover:bg-primary/20"
                             onClick={() => {
                               navigate(`/rooms/${roomId}`);
                               setOpen(false);
@@ -124,12 +126,12 @@ export function ChatbotWidget() {
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && sendMessage()}
                 placeholder="Ask AI..."
-                className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm outline-none placeholder:text-slate-400"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-slate-100"
               />
               <button
                 onClick={sendMessage}
                 disabled={loading}
-                className="grid h-10 w-10 place-items-center rounded-xl bg-brand-gradient text-white disabled:opacity-60"
+                className="grid h-10 w-10 place-items-center rounded-xl bg-brand-gradient text-white shadow-soft disabled:opacity-60"
               >
                 <Send className="h-4 w-4" />
               </button>

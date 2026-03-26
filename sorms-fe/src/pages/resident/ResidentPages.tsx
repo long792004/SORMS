@@ -550,12 +550,14 @@ export function ResidentCheckinStatusPage() {
     <section className="page-shell space-y-4">
       <h1 className="section-title">Check-in / Check-out</h1>
       <article className="glass-card rounded-xl p-4">
-        <p className="muted-text">Current Status</p>
-        <p className="mt-2 text-lg font-semibold text-primary">{statusData?.status ?? "No active record"}</p>
-        <div className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
-          <p>Phòng đang đặt: <span className="font-semibold">{statusData?.roomNumber ?? statusData?.roomId ?? pendingInvoice?.roomNumber ?? pendingInvoice?.roomId ?? "-"}</span></p>
-          <p>Thời gian được check-in: <span className="font-semibold">{formatDateTime(statusData?.expectedCheckInDate ?? pendingInvoice?.bookingCheckInDate)}</span></p>
-          <p>Thời gian check-out dự kiến: <span className="font-semibold">{formatDateTime(statusData?.expectedCheckOutDate ?? pendingInvoice?.bookingCheckOutDate)}</span></p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="muted-text">Current Status</p>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{statusData?.status ?? "No active record"}</span>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-3">
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 dark:border-white/10 dark:bg-white/5">Phòng đang đặt: <span className="font-semibold">{statusData?.roomNumber ?? statusData?.roomId ?? pendingInvoice?.roomNumber ?? pendingInvoice?.roomId ?? "-"}</span></p>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 dark:border-white/10 dark:bg-white/5">Check-in: <span className="font-semibold">{formatDateTime(statusData?.expectedCheckInDate ?? pendingInvoice?.bookingCheckInDate)}</span></p>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 dark:border-white/10 dark:bg-white/5">Check-out: <span className="font-semibold">{formatDateTime(statusData?.expectedCheckOutDate ?? pendingInvoice?.bookingCheckOutDate)}</span></p>
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Quy trình: đặt phòng và tạo invoice → giữ phòng 15 phút để thanh toán → thanh toán PayOS thành công → đến đúng giờ đã đặt thì Staff/Admin phê duyệt check-in → khi gần giờ check-in/check-out hệ thống tự gửi nhắc nhở.</p>
         {pendingInvoice ? (
@@ -587,9 +589,11 @@ export function ResidentCheckinStatusPage() {
             </select>
             {selectedRoom ? (
               <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-100">
-                <p>Phòng đang chọn: <span className="font-semibold">{selectedRoom.roomNumber ?? selectedRoom.id}</span></p>
-                <p>Check-in được từ: <span className="font-semibold">{checkInDate || "-"} {String(selectedRoomCheckInHour).padStart(2, "0")}:00</span></p>
-                <p>Check-out trước: <span className="font-semibold">{checkOutDate || "-"} {String(selectedRoomCheckOutHour).padStart(2, "0")}:00</span></p>
+                <p className="font-semibold">Phòng {selectedRoom.roomNumber ?? selectedRoom.id}</p>
+                <div className="mt-1 grid gap-1 md:grid-cols-2">
+                  <p>Check-in từ: <span className="font-semibold">{checkInDate || "-"} {String(selectedRoomCheckInHour).padStart(2, "0")}:00</span></p>
+                  <p>Check-out trước: <span className="font-semibold">{checkOutDate || "-"} {String(selectedRoomCheckOutHour).padStart(2, "0")}:00</span></p>
+                </div>
               </div>
             ) : null}
             <input

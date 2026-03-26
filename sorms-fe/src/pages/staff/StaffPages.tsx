@@ -47,6 +47,27 @@ const formatDateTime = (value?: string | null) => {
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("vi-VN");
 };
+const parseGuestNames = (guestList: unknown) => {
+  if (!guestList) return [] as string[];
+  if (Array.isArray(guestList)) {
+    return guestList
+      .map((guest: any) => String(guest?.fullName ?? guest?.name ?? "").trim())
+      .filter(Boolean);
+  }
+  if (typeof guestList === "string") {
+    try {
+      const parsed = JSON.parse(guestList);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((guest: any) => String(guest?.fullName ?? guest?.name ?? "").trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return guestList.split(",").map((name) => name.trim()).filter(Boolean);
+    }
+  }
+  return [] as string[];
+};
 
 export function StaffDashboardPage() {
   const { data: residents } = useQuery({ queryKey: ["staff", "residents"], queryFn: async () => unwrap(await residentApi.getResidents()) });
@@ -262,23 +283,41 @@ export function StaffCheckInOutPage() {
             const holdExpiresAt = item.holdExpiresAt ?? invoice?.expirationTime ?? null;
             const holdExpiresMs = holdExpiresAt ? new Date(holdExpiresAt).getTime() : 0;
             const holdState = holdExpiresMs > Date.now() ? "Active" : holdExpiresMs > 0 ? "Expired" : "Unknown";
+            const guestNames = parseGuestNames(item.guestList);
             return (
-              <article key={item.id ?? index} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
-                <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
-                <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
-                <p className="muted-text">{String(item.expectedCheckInDate ?? "").slice(0, 10)} → {String(item.expectedCheckOutDate ?? "").slice(0, 10)}</p>
-                <p className="muted-text">Check-in time: {formatDateTime(item.expectedCheckInDate)}</p>
-                <p className="muted-text">Check-out time: {formatDateTime(item.expectedCheckOutDate)}</p>
-                <p className="muted-text">Booker: {item.bookerFullName ?? "-"} • {item.bookerPhone ?? "-"} • CCCD: {item.bookerIdentityNumber ?? "-"}</p>
-                <p className="muted-text">Residents: {item.numberOfResidents ?? "-"}</p>
-                <p className="muted-text">Guest list: {item.guestList ? String(item.guestList) : "-"}</p>
-                <p className={`mt-1 ${paid ? "text-emerald-400" : "text-amber-400"}`}>Invoice: {invoice ? `#${invoice.id} - ${invoice.status}` : "Chưa tìm thấy invoice"}</p>
-                <p className={`mt-1 ${identityVerified ? "text-emerald-400" : "text-rose-300"}`}>
-                  CCCD verification: {identityVerified ? "Verified" : "Not verified"}
-                </p>
-                <p className={`mt-1 ${holdState === "Active" ? "text-amber-300" : holdState === "Expired" ? "text-rose-300" : "text-slate-400"}`}>
-                  Hold: {holdState} • Expires: {formatDateTime(holdExpiresAt)}
-                </p>
+              <article key={item.id ?? index} className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm shadow-soft dark:border-white/10 dark:bg-white/5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">Request #{item.id} • Room {item.roomNumber ?? item.roomId}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Resident: {item.residentName ?? item.residentId}</p>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${paid ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+                    {invoice ? `Invoice #${invoice.id} • ${invoice.status}` : "No invoice"}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <p className="muted-text">Check-in: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.expectedCheckInDate)}</span></p>
+                  <p className="muted-text">Check-out: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.expectedCheckOutDate)}</span></p>
+                  <p className="muted-text">Booker: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerFullName ?? "-"}</span></p>
+                  <p className="muted-text">Phone: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerPhone ?? "-"}</span></p>
+                  <p className="muted-text">CCCD: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerIdentityNumber ?? "-"}</span></p>
+                  <p className="muted-text">Residents: <span className="font-medium text-slate-700 dark:text-slate-200">{item.numberOfResidents ?? "-"}</span></p>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {guestNames.length > 0 ? guestNames.map((guestName, guestIndex) => (
+                    <span key={`${item.id}-${guestIndex}-${guestName}`} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-200">
+                      {guestName}
+                    </span>
+                  )) : <span className="text-xs text-slate-500 dark:text-slate-400">Guest list: -</span>}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className={`rounded-full px-2 py-0.5 ${identityVerified ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300"}`}>
+                    CCCD: {identityVerified ? "Verified" : "Not verified"}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 ${holdState === "Active" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : holdState === "Expired" ? "bg-rose-500/10 text-rose-700 dark:text-rose-300" : "bg-slate-500/10 text-slate-600 dark:text-slate-300"}`}>
+                    Hold: {holdState} • {formatDateTime(holdExpiresAt)}
+                  </span>
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button
                     variant="ghost"
@@ -310,16 +349,22 @@ export function StaffCheckInOutPage() {
         <div className="mt-3 space-y-3">
           {pendingCheckOutList.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400">Không có yêu cầu check-out chờ duyệt.</p> : null}
           {pendingCheckOutList.map((item: any, index) => (
-            <article key={item.id ?? index} className="rounded-xl border border-slate-200 p-3 text-sm dark:border-white/10">
-              <p className="font-semibold">Request #{item.id} - Room {item.roomNumber ?? item.roomId}</p>
-              <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
-              <p className="muted-text">Booked stay: {formatDateTime(item.expectedCheckInDate)} → {formatDateTime(item.expectedCheckOutDate)}</p>
-              <p className="muted-text">Booker: {item.bookerFullName ?? "-"} • {item.bookerPhone ?? "-"}</p>
-              <p className="muted-text">Residents: {item.numberOfResidents ?? "-"}</p>
-              <p className="muted-text">Guest list: {item.guestList ? String(item.guestList) : "-"}</p>
-              <p className={`mt-1 ${inspectedCheckInRecordIds.has(Number(item.id)) ? "text-emerald-400" : "text-amber-300"}`}>
-                Inspection: {inspectedCheckInRecordIds.has(Number(item.id)) ? "Completed" : "Missing"}
-              </p>
+            <article key={item.id ?? index} className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm shadow-soft dark:border-white/10 dark:bg-white/5">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">Request #{item.id} • Room {item.roomNumber ?? item.roomId}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Resident: {item.residentName ?? item.residentId}</p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${inspectedCheckInRecordIds.has(Number(item.id)) ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+                  Inspection: {inspectedCheckInRecordIds.has(Number(item.id)) ? "Completed" : "Missing"}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <p className="muted-text">Booked check-in: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.expectedCheckInDate)}</span></p>
+                <p className="muted-text">Booked check-out: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.expectedCheckOutDate)}</span></p>
+                <p className="muted-text">Booker: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerFullName ?? "-"}</span></p>
+                <p className="muted-text">Phone: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerPhone ?? "-"}</span></p>
+              </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Button variant="ghost" onClick={() => approveCheckOut.mutate(item.id)} disabled={approveCheckOut.isPending}>Approve Check-out</Button>
                 {!inspectedCheckInRecordIds.has(Number(item.id)) ? (
@@ -360,22 +405,37 @@ export function StaffBookingHistoryPage() {
 
       <div className="space-y-3">
         {bookings.map((item: any, index) => (
-          <article key={item.id ?? index} className="glass-card rounded-xl border border-slate-200 p-4 text-sm dark:border-white/10">
-            <p className="font-semibold">Booking #{item.id} • Room {item.roomNumber ?? item.roomId}</p>
-            <p className="muted-text">Resident: {item.residentName ?? item.residentId}</p>
-            <p className="muted-text">Status: {item.bookingStatus ?? item.status ?? "-"}</p>
-            <p className="muted-text">Request time: {formatDateTime(item.requestTime)}</p>
-            <p className="muted-text">Expected check-in: {formatDateTime(item.expectedCheckInDate)}</p>
-            <p className="muted-text">Expected check-out: {formatDateTime(item.expectedCheckOutDate)}</p>
-            <p className="muted-text">Actual check-in: {formatDateTime(item.checkInTime)}</p>
-            <p className="muted-text">Actual check-out: {formatDateTime(item.checkOutTime)}</p>
-            <p className="muted-text">Booker: {item.bookerFullName ?? "-"} • {item.bookerEmail ?? "-"} • {item.bookerPhone ?? "-"}</p>
-            <p className="muted-text">Booker CCCD: {item.bookerIdentityNumber ?? "-"}</p>
-            <p className="muted-text">Residents: {item.numberOfResidents ?? "-"}</p>
-            <p className="muted-text">Guest list: {item.guestList ? String(item.guestList) : "-"}</p>
-            <p className="muted-text">Bed preference: {item.bedPreference ?? "-"} • Smoking: {item.smokingPreference ?? "-"}</p>
-            <p className="muted-text">Approved by: {item.approvedByName ?? item.approvedBy ?? "-"} • Approved time: {formatDateTime(item.approvedTime)}</p>
-            {item.rejectReason ? <p className="mt-1 text-rose-700 dark:text-rose-300">Reject reason: {item.rejectReason}</p> : null}
+          <article key={item.id ?? index} className="glass-card rounded-2xl border border-slate-200 p-4 text-sm dark:border-white/10">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold">Booking #{item.id} • Room {item.roomNumber ?? item.roomId}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Resident: {item.residentName ?? item.residentId}</p>
+              </div>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{item.bookingStatus ?? item.status ?? "-"}</span>
+            </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              <p className="muted-text">Request time: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.requestTime)}</span></p>
+              <p className="muted-text">Approved time: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.approvedTime)}</span></p>
+              <p className="muted-text">Expected check-in: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.expectedCheckInDate)}</span></p>
+              <p className="muted-text">Expected check-out: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.expectedCheckOutDate)}</span></p>
+              <p className="muted-text">Actual check-in: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.checkInTime)}</span></p>
+              <p className="muted-text">Actual check-out: <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(item.checkOutTime)}</span></p>
+              <p className="muted-text">Booker: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerFullName ?? "-"}</span></p>
+              <p className="muted-text">Contact: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerEmail ?? "-"} • {item.bookerPhone ?? "-"}</span></p>
+              <p className="muted-text">Booker CCCD: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bookerIdentityNumber ?? "-"}</span></p>
+              <p className="muted-text">Residents: <span className="font-medium text-slate-700 dark:text-slate-200">{item.numberOfResidents ?? "-"}</span></p>
+              <p className="muted-text">Bed: <span className="font-medium text-slate-700 dark:text-slate-200">{item.bedPreference ?? "-"}</span></p>
+              <p className="muted-text">Smoking: <span className="font-medium text-slate-700 dark:text-slate-200">{item.smokingPreference ?? "-"}</span></p>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {parseGuestNames(item.guestList).length > 0 ? parseGuestNames(item.guestList).map((guestName, guestIndex) => (
+                <span key={`${item.id}-history-${guestIndex}-${guestName}`} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 dark:border-white/10 dark:bg-white/10 dark:text-slate-200">
+                  {guestName}
+                </span>
+              )) : <span className="text-xs text-slate-500 dark:text-slate-400">Guest list: -</span>}
+            </div>
+            <p className="mt-2 muted-text">Approved by: <span className="font-medium text-slate-700 dark:text-slate-200">{item.approvedByName ?? item.approvedBy ?? "-"}</span></p>
+            {item.rejectReason ? <p className="mt-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-rose-700 dark:text-rose-300">Reject reason: {item.rejectReason}</p> : null}
           </article>
         ))}
       </div>
