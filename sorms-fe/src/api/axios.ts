@@ -22,10 +22,7 @@ const handleError = (error: AxiosError) => {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    "Content-Type": "application/json"
-  }
+  timeout: 30000
 });
 
 api.interceptors.request.use(attachToken, handleError);
