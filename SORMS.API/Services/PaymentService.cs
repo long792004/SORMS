@@ -23,6 +23,7 @@ namespace SORMS.API.Services
 {
     public class PaymentService : IPaymentService
     {
+        private const int BookingHoldMinutes = 15;
         private readonly SormsDbContext _context;
         private readonly ILogger<PaymentService> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
@@ -32,6 +33,7 @@ namespace SORMS.API.Services
         private readonly string? _payOSClientId;
         private readonly string? _payOSApiKey;
         private readonly string? _payOSChecksumKey;
+        private readonly string? _payOSPartnerCode;
         private readonly string _payOSBaseUrl;
         private readonly bool _payOSEnabled;
         private readonly JsonSerializerOptions _jsonOptions = new()
@@ -55,6 +57,7 @@ namespace SORMS.API.Services
             _payOSClientId = configuration["PayOS:ClientId"];
             _payOSApiKey = configuration["PayOS:ApiKey"];
             _payOSChecksumKey = configuration["PayOS:ChecksumKey"];
+            _payOSPartnerCode = configuration["PayOS:PartnerCode"];
             _payOSBaseUrl = configuration["PayOS:BaseUrl"] ?? "https://api-merchant.payos.vn";
 
             // Check if PayOS is configured
@@ -156,7 +159,7 @@ namespace SORMS.API.Services
                     RoomId = invoiceDto.RoomId,
                     Amount = invoiceDto.Amount,
                     DiscountAmount = 0,
-                    TotalAmount = invoiceDto.Amount,
+                    TotalAmount = invoiceDto.Amount * 1.15m,
                     Description = invoiceDto.Description,
                     PaymentMethod = "PayOS",
                     Status = "Pending",
@@ -250,7 +253,7 @@ namespace SORMS.API.Services
 
                 invoice.VoucherId = voucher.Id;
                 invoice.DiscountAmount = discountAmount;
-                invoice.TotalAmount = Math.Max(0, invoice.Amount - discountAmount);
+                invoice.TotalAmount = Math.Max(0, (invoice.Amount * 1.15m) - discountAmount);
                 invoice.PayOSOrderId = null;
                 invoice.CheckoutUrl = null;
                 voucher.UsedCount++;
@@ -317,7 +320,7 @@ namespace SORMS.API.Services
                     invoice,
                     returnUrl,
                     cancelUrl,
-                    DateTime.UtcNow.AddMinutes(6));
+                    DateTime.UtcNow.AddMinutes(BookingHoldMinutes));
             }
             catch (Exception ex)
             {
@@ -380,12 +383,13 @@ namespace SORMS.API.Services
                 if (roomAlreadyBooked)
                     throw new InvalidOperationException("Room is currently held by another user");
 
-                var holdExpiresAt = now.AddMinutes(6);
+                var holdExpiresAt = now.AddMinutes(BookingHoldMinutes);
                 room.Status = "OnHold";
                 room.HoldExpiresAt = holdExpiresAt;
 
                 var nights = (expectedCheckOut - expectedCheckIn).Days;
-                var amount = room.MonthlyRent * nights;
+                var dailyRate = Math.Round(room.MonthlyRent / 30m);
+                var amount = dailyRate * nights;
 
                 var invoice = new Invoice
                 {
@@ -394,7 +398,7 @@ namespace SORMS.API.Services
                     RoomId = roomId,
                     Amount = amount,
                     DiscountAmount = 0,
-                    TotalAmount = amount,
+                    TotalAmount = amount * 1.15m,
                     PaymentMethod = "PayOS",
                     Description = $"Room booking hold for room {room.RoomNumber} ({expectedCheckIn:yyyy-MM-dd} to {expectedCheckOut:yyyy-MM-dd})",
                     Status = "Pending",
@@ -493,18 +497,22 @@ namespace SORMS.API.Services
             long orderCode = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L) + (invoice.Id % 1000);
             invoice.PayOSOrderId = orderCode;
 
-            // Prepare return URLs
-            string finalReturnUrl = returnUrl ?? $"{_frontendUrl}/resident/invoices?success=true";
-            string finalCancelUrl = cancelUrl ?? $"{_frontendUrl}/resident/invoices?cancel=true";
+            // Prepare return URLs (fallback to configured frontend URL when payload URL is invalid)
+            string defaultReturnUrl = $"{_frontendUrl.TrimEnd('/')}/resident/invoices?success=true";
+            string defaultCancelUrl = $"{_frontendUrl.TrimEnd('/')}/resident/invoices?cancel=true";
+            string finalReturnUrl = NormalizeRedirectUrlOrFallback(returnUrl, defaultReturnUrl);
+            string finalCancelUrl = NormalizeRedirectUrlOrFallback(cancelUrl, defaultCancelUrl);
 
+            _logger.LogInformation($"PayOS Enabled: {_payOSEnabled}, ClientId prefix: {(_payOSClientId?.Length > 4 ? _payOSClientId[..4] : "N/A")}");
             if (!_payOSEnabled)
                 throw new Exception("PayOS chưa được cấu hình. Vui lòng cấu hình PayOS ClientId/ApiKey/ChecksumKey để tạo QR thanh toán thật.");
 
             await EnsureWebhookConfiguredAsync();
 
             int amount = decimal.ToInt32(decimal.Round(invoice.TotalAmount, MidpointRounding.AwayFromZero));
+            _logger.LogInformation($"Creating PayOS payment link for Invoice {invoice.Id}. TotalAmount: {invoice.TotalAmount}, Rounded Amount: {amount}");
             if (amount <= 0)
-                throw new Exception("Invoice amount must be greater than 0.");
+                throw new Exception($"Số tiền thanh toán không hợp lệ: {amount} VND. Vui lòng kiểm tra lại hóa đơn.");
 
             string payOSDescription = BuildPayOSDescription(invoice.Id);
             var paymentRequest = new PayOSCreatePaymentRequestDto
@@ -535,7 +543,11 @@ namespace SORMS.API.Services
             var payload = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"PayOS create link failed: {payload}");
+            {
+                var payosError = JsonSerializer.Deserialize<PayOSCreatePaymentApiResponseDto>(payload, _jsonOptions);
+                var detail = payosError?.Desc;
+                throw new Exception($"PayOS create link failed ({(int)response.StatusCode}): {detail ?? payload}");
+            }
 
             var payOSResponse = JsonSerializer.Deserialize<PayOSCreatePaymentApiResponseDto>(payload, _jsonOptions);
             if (payOSResponse?.Code != "00" || payOSResponse.Data == null)
@@ -621,8 +633,13 @@ namespace SORMS.API.Services
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.Remove("x-client-id");
             client.DefaultRequestHeaders.Remove("x-api-key");
+            client.DefaultRequestHeaders.Remove("x-partner-code");
             client.DefaultRequestHeaders.Add("x-client-id", _payOSClientId);
             client.DefaultRequestHeaders.Add("x-api-key", _payOSApiKey);
+            if (!string.IsNullOrWhiteSpace(_payOSPartnerCode))
+            {
+                client.DefaultRequestHeaders.Add("x-partner-code", _payOSPartnerCode);
+            }
             return client;
         }
 
@@ -676,6 +693,23 @@ namespace SORMS.API.Services
         private string BuildPayOSDescription(int invoiceId)
         {
             return $"INV{invoiceId}";
+        }
+
+        private static string NormalizeRedirectUrlOrFallback(string? candidateUrl, string fallbackUrl)
+        {
+            if (Uri.TryCreate(candidateUrl, UriKind.Absolute, out var candidate) &&
+                (candidate.Scheme == Uri.UriSchemeHttp || candidate.Scheme == Uri.UriSchemeHttps))
+            {
+                return candidate.ToString();
+            }
+
+            if (Uri.TryCreate(fallbackUrl, UriKind.Absolute, out var fallback) &&
+                (fallback.Scheme == Uri.UriSchemeHttp || fallback.Scheme == Uri.UriSchemeHttps))
+            {
+                return fallback.ToString();
+            }
+
+            return "https://payos.vn";
         }
 
         private string BuildItemName(string description)
@@ -1097,6 +1131,13 @@ namespace SORMS.API.Services
 
         private InvoiceDetailDto MapToInvoiceDetailDto(Invoice invoice)
         {
+            var expirationTime = invoice.Room?.HoldExpiresAt;
+            if (!string.Equals(invoice.Status, "Pending", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(invoice.Status, "Created", StringComparison.OrdinalIgnoreCase))
+            {
+                expirationTime = null;
+            }
+
             return new InvoiceDetailDto
             {
                 Id = invoice.Id,
@@ -1115,6 +1156,7 @@ namespace SORMS.API.Services
                 PaymentMethod = invoice.PaymentMethod,
                 CheckoutUrl = invoice.CheckoutUrl,
                 CreatedAt = invoice.CreatedAt,
+                ExpirationTime = expirationTime,
                 PaidAt = invoice.PaidAt,
                 PayOSOrderId = invoice.PayOSOrderId,
                 BookingCheckInDate = invoice.BookingCheckInDate,

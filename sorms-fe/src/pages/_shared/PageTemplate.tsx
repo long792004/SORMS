@@ -18,8 +18,8 @@ export function PageTemplate({ title, subtitle, showCards = true }: PageTemplate
 
       {showCards ? (
         <div className="airbnb-grid">
-          <RoomCard title="Premium Studio" price="3.800.000 VND / month" />
-          <RoomCard title="Deluxe Twin Room" price="4.500.000 VND / month" />
+          <RoomCard title="Premium Studio" price="126.700 VND / day" />
+          <RoomCard title="Deluxe Twin Room" price="150.000 VND / day" />
           <InvoiceCard id="INV-1032" amount="2.950.000 VND" status="Pending" />
         </div>
       ) : null}

@@ -210,7 +210,7 @@ namespace SORMS.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error creating payment link: {ex.Message}");
+                _logger.LogError(ex, "Error creating payment link for Invoice {InvoiceId}", invoiceId);
                 return BadRequest(new PaymentResponseDto
                 {
                     Success = false,

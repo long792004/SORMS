@@ -11,7 +11,7 @@ localStorage.setItem("theme_mode", "light");
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AppProviders>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppRoutes />
       </BrowserRouter>
     </AppProviders>

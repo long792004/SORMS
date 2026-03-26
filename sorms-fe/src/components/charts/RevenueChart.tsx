@@ -12,8 +12,8 @@ export function RevenueChart() {
   return (
     <div className="glass-card rounded-xl p-4">
       <h4 className="mb-3 font-semibold">Revenue Trend</h4>
-      <div className="h-56 min-h-[220px] min-w-0">
-        <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+      <div className="min-h-[220px] min-w-0">
+        <ResponsiveContainer width="100%" height={220} minWidth={0}>
           <LineChart data={data}>
             <XAxis dataKey="month" stroke="#cbd5e1" />
             <YAxis stroke="#cbd5e1" />

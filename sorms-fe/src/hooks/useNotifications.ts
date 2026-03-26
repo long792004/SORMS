@@ -32,12 +32,16 @@ export function useMyNotifications() {
 }
 
 export function useSentNotificationHistory() {
+  const role = useAuthStore((state) => state.role);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   return useQuery({
-    queryKey: ["notifications", "sent-history"],
+    queryKey: ["notifications", "sent-history", role],
     queryFn: async () => {
       const response = await notificationApi.getSentHistory();
       return response.data?.data ?? response.data;
-    }
+    },
+    enabled: isAuthenticated && role === "Admin"
   });
 }
 

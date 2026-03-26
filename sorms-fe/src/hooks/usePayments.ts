@@ -39,8 +39,8 @@ export function useCreatePaymentLink() {
   return useMutation({
     mutationFn: ({ invoiceId, returnUrl, cancelUrl }: { invoiceId: string; returnUrl?: string; cancelUrl?: string }) =>
       paymentApi.createPaymentLink(invoiceId, {
-        returnUrl: returnUrl ?? `${window.location.origin}/resident/invoices?success=true`,
-        cancelUrl: cancelUrl ?? `${window.location.origin}/resident/invoices?cancel=true`
+        returnUrl,
+        cancelUrl
       })
   });
 }

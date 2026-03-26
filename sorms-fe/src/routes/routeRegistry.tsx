@@ -51,6 +51,7 @@ import {
   AdminVouchersPage
 } from "../pages/admin/AdminPages";
 import {
+  StaffBookingHistoryPage,
   StaffCheckInOutPage,
   StaffDashboardPage,
   StaffNotificationsPage,
@@ -107,6 +108,7 @@ export const allRoutes: RouteGroups = {
   staff: [
     { path: "/staff/dashboard", element: <StaffDashboardPage /> },
     { path: "/staff/checkin-checkout", element: <StaffCheckInOutPage /> },
+    { path: "/staff/history-booking", element: <StaffBookingHistoryPage /> },
     { path: "/staff/residents", element: <StaffResidentsPage /> },
     { path: "/staff/rooms", element: <StaffRoomsPage /> },
     { path: "/staff/service-requests", element: <StaffServiceRequestsPage /> },
@@ -116,6 +118,7 @@ export const allRoutes: RouteGroups = {
   admin: [
     { path: "/admin/dashboard", element: <AdminDashboardPage /> },
     { path: "/admin/checkin-checkout", element: <StaffCheckInOutPage /> },
+    { path: "/admin/history-booking", element: <StaffBookingHistoryPage /> },
     { path: "/admin/residents", element: <AdminResidentsPage /> },
     { path: "/admin/residents/:id", element: <AdminResidentDetailPage /> },
     { path: "/admin/residents/create", element: <AdminCreateResidentPage /> },

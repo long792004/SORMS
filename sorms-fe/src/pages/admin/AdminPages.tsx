@@ -36,6 +36,16 @@ const getApiErrorMessage = (error: any, fallback: string) => {
 const genderOptions = ["Male", "Female", "Other"];
 const roomTypeOptions = ["Single", "Double", "Triple", "Suite"];
 const roomStatusOptions = ["Available", "Occupied", "Maintenance"];
+const toDailyRate = (value: unknown) => {
+  const monthly = Number(value ?? 0);
+  if (!Number.isFinite(monthly) || monthly <= 0) return 0;
+  return Math.round(monthly / 30);
+};
+const toMonthlyRate = (value: unknown) => {
+  const daily = Number(value ?? 0);
+  if (!Number.isFinite(daily) || daily <= 0) return 0;
+  return Math.round(daily * 30);
+};
 
 export function AdminDashboardPage() {
   const { data: rooms } = useQuery({ queryKey: ["admin", "dashboard", "rooms"], queryFn: async () => unwrap(await roomApi.getRooms()) });
@@ -450,7 +460,7 @@ export function AdminRoomsPage() {
     roomNumber: "",
     roomType: "Single",
     floor: "1",
-    monthlyRent: "3000000",
+    monthlyRent: "100000",
     area: "20",
     maxCapacity: "1",
     status: "Available",
@@ -468,7 +478,7 @@ export function AdminRoomsPage() {
     roomType: form.roomType,
     type: form.roomType,
     floor: Number(form.floor),
-    monthlyRent: Number(form.monthlyRent),
+    monthlyRent: toMonthlyRate(form.monthlyRent),
     area: Number(form.area),
     maxCapacity: Number(form.maxCapacity),
     status: form.status,
@@ -582,8 +592,8 @@ export function AdminRoomsPage() {
             <input value={createForm.floor} onChange={(event) => setCreateForm((prev) => ({ ...prev, floor: event.target.value }))} placeholder="1" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-500">Giá thuê (Monthly rent)</label>
-            <input value={createForm.monthlyRent} onChange={(event) => setCreateForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="3,000,000" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
+            <label className="text-xs font-medium text-slate-500">Giá thuê/ngày (Daily rate)</label>
+            <input value={createForm.monthlyRent} onChange={(event) => setCreateForm((prev) => ({ ...prev, monthlyRent: event.target.value }))} placeholder="100,000" className="h-10 rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">Diện tích (Area m²)</label>
@@ -667,7 +677,7 @@ export function AdminRoomsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">Room {room.roomNumber}</p>
-                    <p className="muted-text">#{room.id} • {room.roomType ?? room.type} • Floor {room.floor ?? "-"} • {Number(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND</p>
+                    <p className="muted-text">#{room.id} • {room.roomType ?? room.type} • Floor {room.floor ?? "-"} • {toDailyRate(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND/ngày</p>
                     <p className="muted-text">Area: {room.area ?? "-"}m² • Capacity: {room.maxCapacity ?? "-"} • Status: <span className={room.status === "Maintenance" ? "text-amber-500 font-medium" : ""}>{room.status ?? "-"}</span></p>
                     {room.status === "Maintenance" && (
                       <div className="mt-1 flex items-center gap-2">
@@ -691,7 +701,7 @@ export function AdminRoomsPage() {
                         roomNumber: room.roomNumber ?? "",
                         roomType: room.roomType ?? room.type ?? "Single",
                         floor: String(room.floor ?? 1),
-                        monthlyRent: String(room.monthlyRent ?? room.price ?? 0),
+                        monthlyRent: String(toDailyRate(room.monthlyRent ?? room.price ?? 0)),
                         area: String(room.area ?? 20),
                         maxCapacity: String(room.maxCapacity ?? 1),
                         status: room.status ?? "Available",

@@ -19,8 +19,16 @@ import { useAuthStore } from "@/store/authStore";
 const listOf = (value: unknown): any[] => (Array.isArray(value) ? value : []);
 const toApiDateTime = (dateText: string) => `${dateText}T00:00:00Z`;
 const toApiErrorMessage = (error: unknown, fallback: string) => {
-  const message = (error as any)?.response?.data?.message;
-  return typeof message === "string" && message.trim() ? message : fallback;
+  const data = (error as any)?.response?.data;
+  const message = data?.message ?? data?.Message ?? data?.desc ?? data?.Desc;
+  if (typeof message === "string" && message.trim()) return message;
+  if (typeof data === "string" && data.trim()) return data;
+  return fallback;
+};
+const toDailyRate = (value: unknown) => {
+  const monthly = Number(value ?? 0);
+  if (!Number.isFinite(monthly) || monthly <= 0) return 0;
+  return Math.round(monthly / 30);
 };
 
 const extractCheckInIdFromNotification = (message: string) => {
@@ -67,6 +75,12 @@ const countNights = (checkIn: string, checkOut: string) => {
 };
 
 const normalizeDateOnly = (value: unknown) => String(value ?? "").slice(0, 10);
+const formatDateTime = (value: unknown) => {
+  if (!value) return "-";
+  const dt = new Date(String(value));
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleString("vi-VN");
+};
 
 const formatBookingStatus = (status: string) => {
   const s = String(status ?? "").toLowerCase();
@@ -363,6 +377,8 @@ export function ResidentBookingPage() {
                       <div>
                         <p className="text-[10px] uppercase font-bold text-slate-400">Thời gian lưu trú</p>
                         <p className="mt-1 text-sm font-medium">{bookingCheckIn} → {bookingCheckOut}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Giờ check-in: {formatDateTime(item.expectedCheckInDate ?? item.checkInDate)}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Giờ check-out: {formatDateTime(item.expectedCheckOutDate ?? item.checkOutDate)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-slate-400">Người đặt & Liên hệ</p>
@@ -501,6 +517,12 @@ export function ResidentCheckinStatusPage() {
   const pendingInvoiceExpiresAt = pendingInvoice?.expirationTime ?? pendingInvoice?.expiredAt ?? pendingInvoice?.holdExpiresAt ?? null;
   const pendingInvoiceRemaining = useCountdown(pendingInvoiceExpiresAt);
   const availableRooms = listOf(roomsData);
+  const selectedRoom = useMemo(
+    () => availableRooms.find((room: any) => String(room.id) === String(roomId)),
+    [availableRooms, roomId]
+  );
+  const selectedRoomCheckInHour = Number(selectedRoom?.checkInFromHour ?? selectedRoom?.checkinFromHour ?? 14);
+  const selectedRoomCheckOutHour = Number(selectedRoom?.checkOutByHour ?? selectedRoom?.checkoutByHour ?? 12);
   const isCheckInDateValid = Boolean(checkInDate && checkOutDate && checkOutDate > checkInDate);
 
   const requestCheckIn = useMutation({
@@ -528,11 +550,18 @@ export function ResidentCheckinStatusPage() {
     <section className="page-shell space-y-4">
       <h1 className="section-title">Check-in / Check-out</h1>
       <article className="glass-card rounded-xl p-4">
-        <p className="muted-text">Current Status</p>
-        <p className="mt-2 text-lg font-semibold text-primary">{statusData?.status ?? "No active record"}</p>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Luồng chuẩn: gửi yêu cầu check-in → hệ thống giữ phòng 6 phút → thanh toán invoice → Staff/Admin phê duyệt thì check-in mới thành công.</p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="muted-text">Current Status</p>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{statusData?.status ?? "No active record"}</span>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-3">
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 dark:border-white/10 dark:bg-white/5">Phòng đang đặt: <span className="font-semibold">{statusData?.roomNumber ?? statusData?.roomId ?? pendingInvoice?.roomNumber ?? pendingInvoice?.roomId ?? "-"}</span></p>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 dark:border-white/10 dark:bg-white/5">Check-in: <span className="font-semibold">{formatDateTime(statusData?.expectedCheckInDate ?? pendingInvoice?.bookingCheckInDate)}</span></p>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 dark:border-white/10 dark:bg-white/5">Check-out: <span className="font-semibold">{formatDateTime(statusData?.expectedCheckOutDate ?? pendingInvoice?.bookingCheckOutDate)}</span></p>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Quy trình: đặt phòng và tạo invoice → giữ phòng 15 phút để thanh toán → thanh toán PayOS thành công → đến đúng giờ đã đặt thì Staff/Admin phê duyệt check-in → khi gần giờ check-in/check-out hệ thống tự gửi nhắc nhở.</p>
         {pendingInvoice ? (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-200">
             <span>
               Invoice #{pendingInvoice.id} đang chờ thanh toán.
               {pendingInvoiceExpiresAt ? ` Hết hạn: ${new Date(pendingInvoiceExpiresAt).toLocaleString("vi-VN")}.` : ""}
@@ -547,7 +576,7 @@ export function ResidentCheckinStatusPage() {
         <div className="glass-card rounded-xl p-4">
           <h3 className="font-semibold">Request Check-in</h3>
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Sau khi gửi yêu cầu, phòng sẽ ở trạng thái OnHold trong 6 phút để bạn hoàn tất thanh toán.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Sau khi gửi yêu cầu, phòng sẽ ở trạng thái OnHold trong 15 phút để bạn hoàn tất thanh toán. Quá thời gian này hệ thống tự động hủy giữ phòng.</p>
             <input type="date" value={checkInDate} onChange={(event) => setCheckInDate(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
             <input type="date" value={checkOutDate} onChange={(event) => setCheckOutDate(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5" />
             <select value={roomId} onChange={(event) => setRoomId(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-100">
@@ -555,9 +584,18 @@ export function ResidentCheckinStatusPage() {
               {availableRooms
                 .filter((room: any) => room.status === "Available")
                 .map((room: any) => (
-                  <option key={room.id} value={room.id}>Room {room.roomNumber} - {room.type} - {Number(room.monthlyRent ?? 0).toLocaleString("vi-VN")} VND</option>
+                  <option key={room.id} value={room.id}>Room {room.roomNumber} - {room.type} - {toDailyRate(room.monthlyRent ?? room.price ?? 0).toLocaleString("vi-VN")} VND/ngày</option>
                 ))}
             </select>
+            {selectedRoom ? (
+              <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-100">
+                <p className="font-semibold">Phòng {selectedRoom.roomNumber ?? selectedRoom.id}</p>
+                <div className="mt-1 grid gap-1 md:grid-cols-2">
+                  <p>Check-in từ: <span className="font-semibold">{checkInDate || "-"} {String(selectedRoomCheckInHour).padStart(2, "0")}:00</span></p>
+                  <p>Check-out trước: <span className="font-semibold">{checkOutDate || "-"} {String(selectedRoomCheckOutHour).padStart(2, "0")}:00</span></p>
+                </div>
+              </div>
+            ) : null}
             <input
               value={numberOfResidents}
               onChange={(event) => setNumberOfResidents(event.target.value)}
@@ -567,7 +605,7 @@ export function ResidentCheckinStatusPage() {
               className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-white/10 dark:bg-white/5"
             />
             {roomsLoading ? <p className="text-xs text-slate-500 dark:text-slate-400">Đang tải danh sách phòng khả dụng...</p> : null}
-            {!isCheckInDateValid ? <p className="text-xs text-amber-300">Ngày check-out phải lớn hơn ngày check-in.</p> : null}
+            {!isCheckInDateValid ? <p className="text-xs text-amber-700 dark:text-amber-300">Ngày check-out phải lớn hơn ngày check-in.</p> : null}
             <Button className="w-full" onClick={() => requestCheckIn.mutate()} disabled={!roomId || !isCheckInDateValid || requestCheckIn.isPending}>
               {requestCheckIn.isPending ? "Đang gửi yêu cầu..." : "Gửi yêu cầu check-in"}
             </Button>
@@ -928,7 +966,6 @@ export function CheckoutPage() {
   const [bedPreference, setBedPreference] = useState("Double Bed");
   const [smokingPreference, setSmokingPreference] = useState("Non-smoking");
   const [earlyCheckIn, setEarlyCheckIn] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("payos");
   const applyVoucher = useApplyVoucher();
   const createLink = useCreatePaymentLink();
   const { data } = useInvoiceDetail(invoiceId || undefined);
@@ -1004,7 +1041,9 @@ export function CheckoutPage() {
   const invoice = data ?? {};
   const currentPaymentStatus = String(paymentStatusData?.status ?? invoice.status ?? "Pending");
   const currentPaymentMethod = String(paymentStatusData?.paymentMethod ?? (invoice as any).paymentMethod ?? "PayOS");
+  const existingCheckoutUrl = String(paymentStatusData?.checkoutUrl ?? (invoice as any)?.checkoutUrl ?? "").trim();
   const isPaid = currentPaymentStatus === "Paid";
+  const canCreatePaymentSession = ["Pending", "Created"].includes(currentPaymentStatus);
   const isAwaitingHotelPayment = currentPaymentStatus === "AwaitingHotelPayment";
   const holdExpiresAt = (invoice as any)?.expirationTime ?? (invoice as any)?.expiredAt ?? (invoice as any)?.holdExpiresAt ?? null;
   const holdRemaining = useCountdown(holdExpiresAt);
@@ -1014,30 +1053,25 @@ export function CheckoutPage() {
   const bookingRoomNumber = String((invoice as any)?.roomNumber ?? decodeURIComponent(roomNumberFromQuery || "") ?? bookingRoomId);
   const bookingGuests = Number((invoice as any)?.bookingNumberOfResidents ?? guestsCount ?? 1);
   const bookingNights = countNights(bookingCheckIn.slice(0, 10), bookingCheckOut.slice(0, 10));
-  const originalAmount = Number((invoice as any)?.originalAmount ?? (invoice as any)?.amount ?? roomPriceFromQuery ?? 0);
+  const invoiceOriginalAmount = Number((invoice as any)?.originalAmount ?? (invoice as any)?.amount ?? 0);
+  const fallbackDailyRateFromQuery = Number.isFinite(roomPriceFromQuery) && roomPriceFromQuery > 0 ? Math.round(roomPriceFromQuery) : 0;
+  const dailyRate = bookingNights > 0 && invoiceOriginalAmount > 0
+    ? Math.round(invoiceOriginalAmount / bookingNights)
+    : fallbackDailyRateFromQuery;
+  const originalAmount = invoiceOriginalAmount > 0
+    ? invoiceOriginalAmount
+    : dailyRate * bookingNights;
   const discountAmount = Number((invoice as any)?.discountAmount ?? 0);
-  const totalAmount = Number((invoice as any)?.totalAmount ?? (invoice as any)?.amount ?? roomPriceFromQuery ?? 0);
   const estimatedTax = Math.round(originalAmount * 0.1);
   const estimatedServiceFee = Math.round(originalAmount * 0.05);
+  const fallbackTotal = originalAmount + estimatedTax + estimatedServiceFee - discountAmount;
+  const totalAmount = Number((invoice as any)?.totalAmount ?? fallbackTotal);
 
   useEffect(() => {
     if (currentPaymentStatus === "Paid" && !paymentSuccess) {
       setPaymentSuccess(true);
     }
   }, [currentPaymentStatus, paymentSuccess]);
-
-  const requestHotelPayment = useMutation({
-    mutationFn: () => paymentApi.requestHotelPayment(invoiceId),
-    onSuccess: () => {
-      setPaymentError("");
-      queryClient.invalidateQueries({ queryKey: ["invoice", invoiceId] });
-      queryClient.invalidateQueries({ queryKey: ["invoice", "payment-status", invoiceId] });
-      queryClient.invalidateQueries({ queryKey: ["invoices", "mine"] });
-    },
-    onError: (error) => {
-      setPaymentError(toApiErrorMessage(error, "Không thể đăng ký thanh toán tại khách sạn."));
-    }
-  });
 
   return (
     <section className="page-shell space-y-5">
@@ -1069,7 +1103,9 @@ export function CheckoutPage() {
           <p className="mt-1 text-slate-600 dark:text-slate-300">Phòng: {decodeURIComponent(roomNumberFromQuery || "") || roomId}</p>
           <p className="text-slate-600 dark:text-slate-300">Check-in: {checkIn} | Check-out: {checkOut}</p>
           <p className="text-slate-600 dark:text-slate-300">Số người ở: {Math.max(1, guestsCount || 1)}</p>
-          <p className="text-slate-600 dark:text-slate-300">Số tiền tạm tính: {roomPriceFromQuery.toLocaleString("vi-VN")} VND</p>
+          <p className="text-slate-600 dark:text-slate-300">Giá/ngày: {fallbackDailyRateFromQuery.toLocaleString("vi-VN")} VND/ngày</p>
+          <p className="text-slate-600 dark:text-slate-300">Số đêm: {bookingNights || "-"}</p>
+          <p className="text-slate-600 dark:text-slate-300">Số tiền tạm tính: {(fallbackDailyRateFromQuery * bookingNights).toLocaleString("vi-VN")} VND</p>
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Hệ thống sẽ tạo yêu cầu check-in và invoice để bạn thanh toán.</p>
           {bookingError ? <p className="mt-2 text-xs text-rose-300">{bookingError}</p> : null}
           {!hasValidDateRange ? <p className="mt-2 text-xs text-amber-300">Ngày check-out phải lớn hơn ngày check-in.</p> : null}
@@ -1177,7 +1213,15 @@ export function CheckoutPage() {
 
           <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-white/10">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600 dark:text-slate-400 text-xs">Room cost ({bookingNights} nights)</span>
+              <span className="text-slate-600 dark:text-slate-400 text-xs">Daily rate</span>
+              <span className="font-medium">{dailyRate.toLocaleString("vi-VN")} VND/ngày</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-400 text-xs">Nights</span>
+              <span className="font-medium">{bookingNights}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600 dark:text-slate-400 text-xs">Room subtotal</span>
               <span className="font-medium">{originalAmount.toLocaleString("vi-VN")} VND</span>
             </div>
             <div className="flex justify-between text-sm">
@@ -1216,21 +1260,10 @@ export function CheckoutPage() {
 
       <div className="glass-card rounded-xl p-5">
         <h2 className="text-lg font-semibold">Payment Method</h2>
-        <div className="mt-3 space-y-2 text-sm">
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
-            <span>PayOS QR / E-wallet</span>
-            <input type="radio" name="paymentMethod" checked={paymentMethod === "payos"} onChange={() => setPaymentMethod("payos")} />
-          </label>
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
-            <span>Bank card</span>
-            <input type="radio" name="paymentMethod" checked={paymentMethod === "card"} onChange={() => setPaymentMethod("card")} />
-          </label>
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">
-            <span>Pay at hotel</span>
-            <input type="radio" name="paymentMethod" checked={paymentMethod === "hotel"} onChange={() => setPaymentMethod("hotel")} />
-          </label>
+        <div className="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-white/10">
+          <p>PayOS QR / E-wallet</p>
         </div>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Bank card sử dụng cổng PayOS checkout. Pay at hotel sẽ tạo trạng thái chờ thanh toán tại quầy lễ tân.</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Hệ thống chỉ hỗ trợ thanh toán trực tuyến qua PayOS.</p>
       </div>
 
       <div className="glass-card rounded-xl p-5">
@@ -1275,22 +1308,28 @@ export function CheckoutPage() {
 
       <Button
         className="w-full max-w-sm"
-        disabled={!invoiceId || createLink.isPending || requestHotelPayment.isPending || isPaid}
+        disabled={!invoiceId || createLink.isPending || isPaid || !canCreatePaymentSession}
         onClick={() => {
           if (!invoiceId) return;
           setPaymentError("");
 
-          if (paymentMethod === "hotel") {
-            requestHotelPayment.mutate();
+          if (existingCheckoutUrl) {
+            setPaymentLinkData({
+              checkoutUrl: existingCheckoutUrl,
+              qrCodeDataUrl: undefined,
+              orderCode: (invoice as any)?.payOSOrderId ?? (invoice as any)?.payOsOrderId
+            });
+            window.open(existingCheckoutUrl, "_blank");
+            return;
+          }
+
+          if (!canCreatePaymentSession) {
+            setPaymentError("Invoice hiện không ở trạng thái có thể tạo link thanh toán.");
             return;
           }
 
           createLink.mutate(
-            { 
-              invoiceId,
-              returnUrl: `${window.location.origin}/booking-success?invoiceId=${invoiceId}`,
-              cancelUrl: `${window.location.origin}/booking-success?invoiceId=${invoiceId}&cancel=true`
-            },
+            { invoiceId },
             {
               onSuccess: (response) => {
                 setPaymentLinkData({
@@ -1299,7 +1338,7 @@ export function CheckoutPage() {
                   orderCode: response.data?.orderCode
                 });
 
-                if (paymentMethod === "card" && response.data?.checkoutUrl) {
+                if (response.data?.checkoutUrl) {
                   window.open(response.data.checkoutUrl, "_blank");
                 }
 
@@ -1307,7 +1346,8 @@ export function CheckoutPage() {
                 queryClient.invalidateQueries({ queryKey: ["invoice", "payment-status", invoiceId] });
               },
               onError: (error) => {
-                setPaymentError(toApiErrorMessage(error, "Không thể tạo phiên thanh toán. Vui lòng thử lại."));
+                const errorMessage = toApiErrorMessage(error, "Không thể tạo phiên thanh toán. Vui lòng thử lại.");
+                setPaymentError(errorMessage);
               }
             }
           );
@@ -1315,15 +1355,9 @@ export function CheckoutPage() {
       >
         {isPaid
           ? "Invoice đã thanh toán"
-          : requestHotelPayment.isPending
-            ? "Đang đăng ký thanh toán tại khách sạn..."
-            : createLink.isPending
+          : createLink.isPending
               ? "Đang tạo phiên thanh toán..."
-              : paymentMethod === "hotel"
-                ? "Xác nhận thanh toán tại khách sạn"
-                : paymentMethod === "card"
-                  ? "Thanh toán bằng thẻ"
-                  : "Tạo QR thanh toán PayOS"}
+              : "Tạo QR thanh toán PayOS"}
       </Button>
 
       {paymentError ? <p className="text-sm text-rose-300">{paymentError}</p> : null}

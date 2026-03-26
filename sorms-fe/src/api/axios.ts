@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, STORAGE_KEYS } from "@/utils/constants";
+import { useAuthStore } from "@/store/authStore";
 
 const attachToken = (config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem(STORAGE_KEYS.token);
@@ -13,9 +14,7 @@ const attachToken = (config: InternalAxiosRequestConfig) => {
 
 const handleError = (error: AxiosError) => {
   if (error.response?.status === 401) {
-    localStorage.removeItem(STORAGE_KEYS.token);
-    localStorage.removeItem(STORAGE_KEYS.role);
-    localStorage.removeItem(STORAGE_KEYS.userId);
+    useAuthStore.getState().clearAuth();
   }
 
   return Promise.reject(error);

@@ -44,7 +44,7 @@ namespace SORMS.API.Services
             var roomData = BuildRoomDataText(roomSummaries);
             var systemPrompt = BuildSystemPrompt(roomData);
             var apiKey = _configuration["GeminiApiKey"];
-            var modelName = _configuration["GeminiModel"] ?? "gemini-2.0-flash";
+            var candidateModels = GetCandidateModels();
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
@@ -74,54 +74,86 @@ namespace SORMS.API.Services
                 }
             };
 
-            try
-            {
-                var response = await _httpClient.PostAsJsonAsync(
-                    $"v1beta/models/{modelName}:generateContent?key={apiKey}",
-                    payload,
-                    cancellationToken);
+            var lastFailureReason = "AI đang bận xử lý";
 
-                if (!response.IsSuccessStatusCode)
+            foreach (var modelName in candidateModels)
+            {
+                try
                 {
-                    var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                    LogGeminiFailure(response.StatusCode, modelName, responseBody);
+                    var response = await _httpClient.PostAsJsonAsync(
+                        $"v1beta/models/{modelName}:generateContent?key={apiKey}",
+                        payload,
+                        cancellationToken);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                        LogGeminiFailure(response.StatusCode, modelName, responseBody);
+                        lastFailureReason = BuildGeminiFailureReason(response.StatusCode);
+                        continue;
+                    }
+
+                    await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                    var geminiResponse = await JsonSerializer.DeserializeAsync<GeminiResponse>(responseStream, _jsonOptions, cancellationToken);
+                    var reply = geminiResponse?.Candidates
+                        .FirstOrDefault()?
+                        .Content?
+                        .Parts?
+                        .FirstOrDefault()?
+                        .Text;
+
+                    if (string.IsNullOrWhiteSpace(reply))
+                    {
+                        lastFailureReason = "AI chưa trả về nội dung hợp lệ";
+                        _logger.LogWarning("Gemini model {ModelName} returned empty reply.", modelName);
+                        continue;
+                    }
+
                     return new ChatbotResponse
                     {
-                        ReplyMessage = BuildFallbackRecommendation(request.Message, roomSummaries, BuildGeminiFailureReason(response.StatusCode))
+                        ReplyMessage = reply.Trim()
                     };
                 }
-
-                await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                var geminiResponse = await JsonSerializer.DeserializeAsync<GeminiResponse>(responseStream, _jsonOptions, cancellationToken);
-                var reply = geminiResponse?.Candidates
-                    .FirstOrDefault()?
-                    .Content?
-                    .Parts?
-                    .FirstOrDefault()?
-                    .Text;
-
-                return new ChatbotResponse
+                catch (TaskCanceledException ex)
                 {
-                    ReplyMessage = string.IsNullOrWhiteSpace(reply)
-                        ? BuildFallbackRecommendation(request.Message, roomSummaries, "AI chưa trả về nội dung hợp lệ")
-                        : reply.Trim()
-                };
+                    lastFailureReason = "AI đang phản hồi chậm";
+                    _logger.LogWarning(ex, "Gemini chatbot request timed out for model {ModelName}.", modelName);
+                }
+                catch (HttpRequestException ex)
+                {
+                    lastFailureReason = "AI đang gặp lỗi kết nối";
+                    _logger.LogError(ex, "Gemini chatbot HTTP request failed for model {ModelName}.", modelName);
+                }
+                catch (JsonException ex)
+                {
+                    lastFailureReason = "AI trả về dữ liệu chưa đọc được";
+                    _logger.LogError(ex, "Gemini chatbot response JSON parsing failed for model {ModelName}.", modelName);
+                }
             }
-            catch (TaskCanceledException ex)
+
+            return new ChatbotResponse
             {
-                _logger.LogWarning(ex, "Gemini chatbot request timed out.");
-                return new ChatbotResponse { ReplyMessage = BuildFallbackRecommendation(request.Message, roomSummaries, "AI đang phản hồi chậm") };
-            }
-            catch (HttpRequestException ex)
+                ReplyMessage = BuildFallbackRecommendation(request.Message, roomSummaries, lastFailureReason)
+            };
+        }
+
+        private List<string> GetCandidateModels()
+        {
+            var configuredPrimary = _configuration["GeminiModel"];
+            var configuredFallbacks = _configuration.GetSection("GeminiFallbackModels").Get<string[]>() ?? Array.Empty<string>();
+
+            var ordered = new List<string>
             {
-                _logger.LogError(ex, "Gemini chatbot HTTP request failed.");
-                return new ChatbotResponse { ReplyMessage = BuildFallbackRecommendation(request.Message, roomSummaries, "AI đang gặp lỗi kết nối") };
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "Gemini chatbot response JSON parsing failed.");
-                return new ChatbotResponse { ReplyMessage = BuildFallbackRecommendation(request.Message, roomSummaries, "AI trả về dữ liệu chưa đọc được") };
-            }
+                string.IsNullOrWhiteSpace(configuredPrimary) ? "gemini-2.0-flash" : configuredPrimary.Trim()
+            };
+
+            ordered.AddRange(configuredFallbacks.Where(model => !string.IsNullOrWhiteSpace(model)).Select(model => model.Trim()));
+            ordered.Add("gemini-2.0-flash");
+            ordered.Add("gemini-1.5-flash");
+
+            return ordered
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private async Task<List<RoomChatbotSummary>> GetAvailableRoomSummariesAsync(CancellationToken cancellationToken)
@@ -194,12 +226,13 @@ namespace SORMS.API.Services
             {
                 var amenities = room.Amenities.Length == 0 ? "Không có dữ liệu" : string.Join(", ", room.Amenities);
                 var reviews = room.RecentReviews.Count == 0 ? "Chưa có review cũ" : string.Join(" | ", room.RecentReviews);
+                var dailyRate = Math.Round(room.Price / 30);
 
                 builder.Append("Phòng ")
                     .Append(room.RoomNumber)
                     .Append(" | Giá: ")
-                    .Append(room.Price.ToString("N0"))
-                    .Append(" VND/tháng | Sức chứa: ")
+                    .Append(dailyRate.ToString("N0"))
+                    .Append(" VND/ngày | Sức chứa: ")
                     .Append(room.Capacity)
                     .Append(" người | Diện tích: ")
                     .Append(room.Area.ToString("0.##"))
@@ -224,9 +257,10 @@ Bạn là chuyên viên tư vấn phòng cao cấp của SORMS. Dưới đây l�
 {roomData}
 Quy tắc:
 1. CHỈ tư vấn dựa trên danh sách trên. Không bịa thông tin.
-2. Trả lời đúng trọng tâm câu hỏi của khách (ví dụ: tìm phòng có ban công, giá dưới 5 triệu).
-3. Khéo léo dùng 'Đánh giá' và 'Review cũ' để tăng độ tin cậy khi thuyết phục khách.
-4. Trả lời thân thiện, ngắn gọn, lịch sự bằng tiếng Việt. Format câu trả lời rõ ràng (có thể dùng bullet points).
+2. ⭐ GIÁ HIỂN THỊ LÀ THEO NGÀY (VND/ngày), không phải tháng. Nếu khách hỏi giá theo tháng, nhân với 30.
+3. Trả lời đúng trọng tâm câu hỏi của khách (ví dụ: tìm phòng có ban công, giá dưới 3 triệu/ngày).
+4. Khéo léo dùng 'Đánh giá' và 'Review cũ' để tăng độ tin cậy khi thuyết phục khách.
+5. Trả lời thân thiện, ngắn gọn, lịch sự bằng tiếng Việt. Format câu trả lời rõ ràng (có thể dùng bullet points).
 """;
         }
 
@@ -294,12 +328,13 @@ Quy tắc:
             {
                 var amenities = room.Amenities.Length == 0 ? "chưa có dữ liệu tiện ích" : string.Join(", ", room.Amenities.Take(4));
                 var bestReview = room.RecentReviews.FirstOrDefault();
+                var dailyRate = Math.Round(room.Price / 30);
 
                 builder.Append("- Phòng ")
                     .Append(room.RoomNumber)
                     .Append(": giá ")
-                    .Append(room.Price.ToString("N0"))
-                    .Append(" VND/tháng, sức chứa ")
+                    .Append(dailyRate.ToString("N0"))
+                    .Append(" VND/ngày, sức chứa ")
                     .Append(room.Capacity)
                     .Append(" người, diện tích ")
                     .Append(room.Area.ToString("0.##"))

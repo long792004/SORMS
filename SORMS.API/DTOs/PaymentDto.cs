@@ -211,6 +211,7 @@ namespace SORMS.API.DTOs
         public string PaymentMethod { get; set; } = "PayOS";
         public string? CheckoutUrl { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? ExpirationTime { get; set; }
         public DateTime? PaidAt { get; set; }
         public long? PayOSOrderId { get; set; }
         public DateTime? BookingCheckInDate { get; set; }
