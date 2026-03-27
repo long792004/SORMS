@@ -21,9 +21,8 @@ namespace SORMS.API.Services
         // Resident tạo yêu cầu check-in vào phòng
         public async Task<CheckInRecordDto> CreateCheckInRequestAsync(int residentId, CreateCheckInRequestDto request)
         {
-            var requestedCheckIn = NormalizeUtcDate(request.CheckInDate);
-            var requestedCheckOut = NormalizeUtcDate(request.CheckOutDate);
-            var numberOfNights = (requestedCheckOut - requestedCheckIn).Days;
+            var requestedCheckInLocal = NormalizeLocalDate(request.CheckInDate);
+            var requestedCheckOutLocal = NormalizeLocalDate(request.CheckOutDate);
             
             // Lấy thông tin phòng trước để lấy khung giờ mặc định
             var roomId = request.RoomId;
@@ -35,24 +34,32 @@ namespace SORMS.API.Services
             if (!string.IsNullOrEmpty(request.CheckInTime) && TimeSpan.TryParse(request.CheckInTime, out var inTs))
             {
                 parsedCheckInTime = inTs;
-                requestedCheckIn = requestedCheckIn.Add(inTs);
+                requestedCheckInLocal = requestedCheckInLocal.Add(inTs);
             }
             else
             {
                 // Mặc định thiết lập đúng khung giờ quy định để không bị overlap
-                requestedCheckIn = requestedCheckIn.AddHours(room.CheckInFromHour > 0 ? room.CheckInFromHour : 14);
+                requestedCheckInLocal = requestedCheckInLocal.AddHours(room.CheckInFromHour > 0 ? room.CheckInFromHour : 14);
             }
 
             TimeSpan? parsedCheckOutTime = null;
             if (!string.IsNullOrEmpty(request.CheckOutTime) && TimeSpan.TryParse(request.CheckOutTime, out var outTs))
             {
                 parsedCheckOutTime = outTs;
-                requestedCheckOut = requestedCheckOut.Add(outTs);
+                requestedCheckOutLocal = requestedCheckOutLocal.Add(outTs);
             }
             else
             {
                 // Mặc định thiết lập đúng khung giờ quy định để không bị overlap
-                requestedCheckOut = requestedCheckOut.AddHours(room.CheckOutByHour > 0 ? room.CheckOutByHour : 12);
+                requestedCheckOutLocal = requestedCheckOutLocal.AddHours(room.CheckOutByHour > 0 ? room.CheckOutByHour : 12);
+            }
+
+            var requestedCheckIn = ConvertLocalBookingDateTimeToUtc(requestedCheckInLocal);
+            var requestedCheckOut = ConvertLocalBookingDateTimeToUtc(requestedCheckOutLocal);
+            var numberOfNights = (requestedCheckOutLocal.Date - requestedCheckInLocal.Date).Days;
+            if (numberOfNights <= 0)
+            {
+                numberOfNights = 1;
             }
 
             var numberOfResidents = Math.Max(1, request.NumberOfResidents);
@@ -60,8 +67,10 @@ namespace SORMS.API.Services
             Console.WriteLine($"[CheckInService] CreateCheckInRequest DEBUG:");
             Console.WriteLine($"  Input expectedCheckInDate: {request.CheckInDate:yyyy-MM-dd HH:mm:ss} (Kind={request.CheckInDate.Kind})");
             Console.WriteLine($"  Input expectedCheckOutDate: {request.CheckOutDate:yyyy-MM-dd HH:mm:ss} (Kind={request.CheckOutDate.Kind})");
-            Console.WriteLine($"  After Normalize requestedCheckIn: {requestedCheckIn:yyyy-MM-dd HH:mm:ss}");
-            Console.WriteLine($"  After Normalize requestedCheckOut: {requestedCheckOut:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"  Local requestedCheckIn: {requestedCheckInLocal:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"  Local requestedCheckOut: {requestedCheckOutLocal:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"  UTC requestedCheckIn: {requestedCheckIn:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"  UTC requestedCheckOut: {requestedCheckOut:yyyy-MM-dd HH:mm:ss}");
             Console.WriteLine($"  Difference in days: {numberOfNights}");
 
             if (requestedCheckOut <= requestedCheckIn)
@@ -241,9 +250,48 @@ namespace SORMS.API.Services
             return await MapToDto(checkInRequest);
         }
 
-        private static DateTime NormalizeUtcDate(DateTime value)
+        private static DateTime NormalizeLocalDate(DateTime value)
         {
-            return DateTime.SpecifyKind(value.Date, DateTimeKind.Utc);
+            return DateTime.SpecifyKind(value.Date, DateTimeKind.Unspecified);
+        }
+
+        private static DateTime ConvertLocalBookingDateTimeToUtc(DateTime localDateTime)
+        {
+            var timezone = GetBusinessTimeZone();
+            var normalizedLocal = DateTime.SpecifyKind(localDateTime, DateTimeKind.Unspecified);
+            return TimeZoneInfo.ConvertTimeToUtc(normalizedLocal, timezone);
+        }
+
+        private static DateTime ToBusinessLocalTime(DateTime dateTime)
+        {
+            var timezone = GetBusinessTimeZone();
+            var utc = dateTime.Kind switch
+            {
+                DateTimeKind.Utc => dateTime,
+                DateTimeKind.Local => dateTime.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+            };
+
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, timezone);
+        }
+
+        private static TimeZoneInfo GetBusinessTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+            }
+            catch
+            {
+                try
+                {
+                    return TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+                }
+                catch
+                {
+                    return TimeZoneInfo.Local;
+                }
+            }
         }
 
         private static decimal ResolveDailyRate(Room room, RoomPricingConfig? pricing)
@@ -342,7 +390,10 @@ namespace SORMS.API.Services
             if (isApproved)
             {
                 if (DateTime.UtcNow < record.ExpectedCheckInDate)
-                    throw new Exception($"Chưa đến thời gian check-in đã đặt ({record.ExpectedCheckInDate:dd/MM/yyyy HH:mm}).");
+                {
+                    var expectedLocal = ToBusinessLocalTime(record.ExpectedCheckInDate);
+                    throw new Exception($"Chưa đến thời gian check-in đã đặt ({expectedLocal:dd/MM/yyyy HH:mm}).");
+                }
 
                 if (DateTime.UtcNow > record.ExpectedCheckOutDate)
                     throw new Exception("Đã quá thời gian lưu trú đã đặt, không thể check-in.");

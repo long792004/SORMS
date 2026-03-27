@@ -88,6 +88,37 @@ function getDistanceLabel(room: any) {
   return String(distance);
 }
 
+function isPublicBookableRoom(room: any) {
+  if (!room) return false;
+  if (room.isActive === false) return false;
+
+  const normalizedStatus = String(room.status ?? "").trim().toLowerCase();
+  if (!normalizedStatus) return true;
+
+  const unavailableStatuses = new Set([
+    "occupied",
+    "maintenance",
+    "checkedin",
+    "pendingcheckout",
+    "checkedout",
+    "reserved"
+  ]);
+
+  if (unavailableStatuses.has(normalizedStatus)) return false;
+
+  if (normalizedStatus === "onhold") {
+    const holdExpiresAt = room.holdExpiresAt ?? room.holdExpireAt;
+    if (!holdExpiresAt) return false;
+
+    const holdExpiresTime = new Date(holdExpiresAt).getTime();
+    if (Number.isNaN(holdExpiresTime)) return false;
+
+    return holdExpiresTime <= Date.now();
+  }
+
+  return normalizedStatus === "available";
+}
+
 function countNights(checkIn: string, checkOut: string) {
   if (!checkIn || !checkOut || checkOut <= checkIn) return 0;
   const inTime = new Date(checkIn).getTime();
@@ -291,6 +322,7 @@ export function RoomListPage() {
   const rooms = useMemo(() => toRoomList(rawData), [rawData]);
 
   const filtered = rooms.filter((room: any) => {
+    if (!isPublicBookableRoom(room)) return false;
     if (getDailyRate(room) > maxPrice) return false;
     if (Number(room.averageRating ?? 0) < minRating) return false;
     if (getRoomCapacity(room) < minGuests) return false;
@@ -317,7 +349,9 @@ export function RoomListPage() {
       return;
     }
 
-    const target = `/rooms/${roomId}`;
+    const target = hasDateFilter
+      ? `/rooms/${roomId}?checkIn=${encodeURIComponent(filterCheckIn)}&checkOut=${encodeURIComponent(filterCheckOut)}&guests=${minGuests}`
+      : `/rooms/${roomId}`;
     if (!isAuthenticated) {
       navigate("/login", { state: { from: target } });
       return;
@@ -395,7 +429,13 @@ export function RoomListPage() {
               reviewCount={getReviewCount(room)}
               location={`${getLocationText(room)}${getDistanceLabel(room) ? ` • ${getDistanceLabel(room)}` : ""}`}
               imageUrl={getRoomImageUrls(room)[0]}
-              onView={() => navigate(`/rooms/${getRoomId(room)}`)}
+              onView={() => {
+                const roomId = getRoomId(room);
+                const target = hasDateFilter
+                  ? `/rooms/${roomId}?checkIn=${encodeURIComponent(filterCheckIn)}&checkOut=${encodeURIComponent(filterCheckOut)}&guests=${minGuests}`
+                  : `/rooms/${roomId}`;
+                navigate(target);
+              }}
               onBook={() => handleBookFromCard(room)}
             />
           ))}
@@ -768,8 +808,7 @@ export function SearchResultsPage() {
   const rooms = useMemo(() => toRoomList(data), [data]);
   const filteredRooms = useMemo(() => {
     return rooms.filter((room: any) => {
-      const status = String(room.status ?? "").toLowerCase();
-      if (status && status !== "available") return false;
+      if (!isPublicBookableRoom(room)) return false;
       if (locationQuery.trim() && !getLocationText(room).toLowerCase().includes(locationQuery.toLowerCase())) return false;
       if (getDailyRate(room) > maxPrice) return false;
       if (Number(room.averageRating ?? 0) < minRating) return false;
@@ -846,7 +885,13 @@ export function SearchResultsPage() {
             reviewCount={getReviewCount(room)}
             location={`${getLocationText(room)}${getDistanceLabel(room) ? ` • ${getDistanceLabel(room)}` : ""}`}
             imageUrl={getRoomImageUrls(room)[0]}
-            onView={() => navigate(`/rooms/${getRoomId(room)}`)}
+            onView={() => {
+              const roomId = getRoomId(room);
+              const target = hasDateFilter
+                ? `/rooms/${roomId}?checkIn=${encodeURIComponent(checkInQuery)}&checkOut=${encodeURIComponent(checkOutQuery)}&guests=${guestsQuery}`
+                : `/rooms/${roomId}`;
+              navigate(target);
+            }}
             onBook={() => handleBookFromCard(room)}
           />
         ))}
